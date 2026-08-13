@@ -11,6 +11,11 @@ public class CanvasManager : MonoBehaviour
     public TextMeshProUGUI armor;
     public TextMeshProUGUI ammo;
     
+    [Header("Health Bar Settings")]
+    public Image healthBarImage;
+    public float tweenSpeed = 5f;
+    private float targetHealthFill = 1f;
+    
     public Image healthIndicator;
     
     public Sprite health1; // healthy
@@ -36,9 +41,18 @@ public class CanvasManager : MonoBehaviour
         }
     }
 
-    public void UpdateHealth(int healthValue)
+    private void Update()
+    {
+        if (healthBarImage != null)
+        {
+            healthBarImage.fillAmount = Mathf.Lerp(healthBarImage.fillAmount, targetHealthFill, tweenSpeed * Time.deltaTime);
+        }
+    }
+
+    public void UpdateHealth(int healthValue, int maxHealthValue)
     {
         health.text = healthValue.ToString();
+        targetHealthFill = (float)healthValue / (float)maxHealthValue;
     }
 
     public void UpdateArmor(int armorValue)

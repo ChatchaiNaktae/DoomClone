@@ -638,6 +638,8 @@ MonoBehaviour:
   health: {fileID: 938840480}
   armor: {fileID: 1771575522}
   ammo: {fileID: 0}
+  healthBarImage: {fileID: 1520721598}
+  tweenSpeed: 5
   healthIndicator: {fileID: 0}
   health1: {fileID: 0}
   health2: {fileID: 0}
@@ -1775,10 +1777,10 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls: []
   m_Sprite: {fileID: 21300000, guid: 50723ba0649ae9545a7d541b62d10bad, type: 3}
-  m_Type: 0
+  m_Type: 3
   m_PreserveAspect: 0
   m_FillCenter: 1
-  m_FillMethod: 4
+  m_FillMethod: 0
   m_FillAmount: 1
   m_FillClockwise: 1
   m_FillOrigin: 0
