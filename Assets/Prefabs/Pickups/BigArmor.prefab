@@ -67,10 +67,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: cfeaf7a2ce39ead40b21721743d7a9b7, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  isHealth: 0
-  isArmor: 1
-  isAmmo: 0
-  amount: 25
+  itemData: {fileID: 11400000, guid: a785279cbccf3fe4e9b05990fc71524b, type: 2}
 --- !u!1 &7626669978876689159
 GameObject:
   m_ObjectHideFlags: 0

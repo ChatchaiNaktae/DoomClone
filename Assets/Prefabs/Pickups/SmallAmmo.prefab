@@ -163,7 +163,4 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: cfeaf7a2ce39ead40b21721743d7a9b7, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  isHealth: 0
-  isArmor: 0
-  isAmmo: 1
-  amount: 5
+  itemData: {fileID: 11400000, guid: e769f718f2c88ee46a591c5dd6e8e861, type: 2}

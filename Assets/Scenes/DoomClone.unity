@@ -2163,7 +2163,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   speed: 10
-  momentumDumping: 5
+  smoothTime: 0.15
   cameraAnimator: {fileID: 330585548}
 --- !u!143 &1853710375
 CharacterController:
@@ -2374,13 +2374,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0fa95f8c5da6bf947b46f9f3b6380708, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  range: 20
-  verticalRange: 20
-  gunShotRadius: 20
-  bigDamage: 2
-  smallDamage: 1
-  fireRate: 1
-  maxAmmo: 10
+  currentGunData: {fileID: 11400000, guid: ff845ab8a28a7e6409163e4b6bb11e59, type: 2}
   raycastLayerMask:
     serializedVersion: 2
     m_Bits: 513
@@ -2388,6 +2382,9 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 512
   enemyManager: {fileID: 1522919420}
+  recoilKickback: 2
+  recoilUp: 0.3
+  smoothTime: 0.2
 --- !u!65 &2091717357
 BoxCollider:
   m_ObjectHideFlags: 0

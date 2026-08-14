@@ -4,41 +4,46 @@ using UnityEngine;
 
 public class ItemPickup : MonoBehaviour
 {
-    public bool isHealth;
-    public bool isArmor;
-    public bool isAmmo;
+    [Header("Item Configuration")]
+    public ItemData itemData; 
     
-    public int amount;  
-    
-    // Start is called before the first frame update
-    void Start()
-    {
-        
-    }
-
-    // Update is called once per frame
-    void Update()
-    {
-        
-    }
-
     void OnTriggerEnter(Collider other)
     {
         if (other.CompareTag("Player"))
         {
-            if (isHealth)
+            if (itemData == null)
             {
-                other.GetComponent<PlayerHealth>().GiveHealth(amount, this.gameObject);
+                Debug.LogWarning("ItemData is missing on this pickup object!");
+                return;
             }
-
-            if (isArmor)
+            
+            switch (itemData.itemType)
             {
-                other.GetComponent<PlayerHealth>().GiveArmor(amount, this.gameObject);
-            }
-
-            if (isAmmo)
-            {
-                other.GetComponentInChildren<Gun>().GiveAmmo(amount, this.gameObject);
+                case ItemType.Health:
+                    other.GetComponent<PlayerHealth>().GiveHealth(itemData.amount, this.gameObject);
+                    break;
+                case ItemType.Armor:
+                    other.GetComponent<PlayerHealth>().GiveArmor(itemData.amount, this.gameObject);
+                    break;
+                case ItemType.Ammo:
+                    other.GetComponentInChildren<Gun>().GiveAmmo(itemData.amount, this.gameObject);
+                    break;
+                
+                // Add logic for picking up a gun
+                case ItemType.Gun:
+                    if (itemData.gunData != null)
+                    {
+                        // Equip the new gun using the data stored in the item
+                        other.GetComponentInChildren<Gun>().EquipGun(itemData.gunData);
+                        
+                        // Destroy the pickup object from the scene
+                        Destroy(this.gameObject);
+                    }
+                    else
+                    {
+                        Debug.LogWarning("GunData is missing in the ItemData template!");
+                    }
+                    break;
             }
         }
     }

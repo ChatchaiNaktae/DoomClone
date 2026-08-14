@@ -5,18 +5,12 @@ using UnityEngine;
 
 public class Gun : MonoBehaviour
 {
-    public float range = 20f;
-    public float verticalRange = 20f;
-    public float gunShotRadius = 20f;
+    [Header("Weapon Data")]
+    public GunData currentGunData; // The ScriptableObject that holds all gun stats
     
-    public float bigDamage = 2f;
-    public float smallDamage = 1f;
-    
-    public float fireRate = 1f;
-    private float nextTimeFire;
-
-    public int maxAmmo;
-    private int ammo = 10;
+    private CustomTimer fireCooldownTimer;
+    private bool canFire = true;
+    private int currentAmmo; // Current ammo needs to be tracked separately from maxAmmo
     
     public LayerMask raycastLayerMask;
     public LayerMask enemyLayerMask;
@@ -24,97 +18,137 @@ public class Gun : MonoBehaviour
     private BoxCollider gunTrigger;
     public EnemyManager enemyManager;
     
+    [Header("Recoil Settings")]
+    public float recoilKickback = 0.8f;
+    public float recoilUp = 0.3f;
+    public float smoothTime = 0.2f;
+    
+    private SpringVector3 recoilSpring;
+    private Vector3 originalLocalPosition;
+    
     void Start()
     {
         gunTrigger = GetComponent<BoxCollider>();
         gunTrigger.isTrigger = true; 
-        gunTrigger.size = new Vector3(1, verticalRange, range);
-        gunTrigger.center = new Vector3(0, 0, range * 0.5f);
         
-        CanvasManager.Instance.UpdateAmmo(ammo);
+        // Equip the gun and load data at the start of the game
+        if (currentGunData != null)
+        {
+            EquipGun(currentGunData);
+        }
+        
+        originalLocalPosition = transform.localPosition;
+        recoilSpring = new SpringVector3(Vector3.zero, smoothTime);
+    }
+    
+    // Call this function whenever you want to swap to a different gun!
+    public void EquipGun(GunData newGun)
+    {
+        currentGunData = newGun;
+        
+        // Update the trigger size based on the new gun's range
+        gunTrigger.size = new Vector3(1, 20f, currentGunData.range);
+        gunTrigger.center = new Vector3(0, 0, currentGunData.range * 0.5f);
+        
+        // Reset ammo when equipping a new gun
+        currentAmmo = currentGunData.maxAmmo;
+        CanvasManager.Instance.UpdateAmmo(currentAmmo);
+        
+        // Reset and update the fire rate timer
+        if (fireCooldownTimer != null)
+        {
+            fireCooldownTimer.Stop();
+        }
+        
+        fireCooldownTimer = new CustomTimer(currentGunData.fireRate);
+        fireCooldownTimer.OnTick += () => {
+            canFire = true;
+            fireCooldownTimer.Stop();
+        };
     }
     
     void Update()
     {
-        if (Input.GetMouseButtonDown(0) && Time.time > nextTimeFire && ammo > 0)
+        if (fireCooldownTimer != null)
+        {
+            fireCooldownTimer.Update();
+        }
+        
+        // Check if player can fire and has ammo
+        if (Input.GetMouseButtonDown(0) && canFire && currentAmmo > 0 && currentGunData != null)
         {
             Fire();
+            
+            canFire = false;
+            fireCooldownTimer.Start();
         }
+        
+        // Apply recoil offset from the spring module to the local position
+        Vector3 currentRecoil = recoilSpring.Update(Time.deltaTime);
+        transform.localPosition = originalLocalPosition + currentRecoil;
     }
     
     void Fire()
     {
-        // Log a message to the console to confirm the left click works
-        Debug.Log("Gun Fired!"); 
+        Debug.Log("Fired " + currentGunData.gunName + "!"); 
         
-        // simulate gun shot radius
-
-        Collider[] enemyColliders = Physics.OverlapSphere(transform.position, gunShotRadius, enemyLayerMask);
+        // Push gun backward (Z-axis) and upward (Y-axis)
+        recoilSpring.Impulse(new Vector3(0, recoilUp, -recoilKickback));
         
-        // alert any enemy in earshot
+        // simulate gun shot radius using data from ScriptableObject
+        Collider[] enemyColliders = Physics.OverlapSphere(transform.position, currentGunData.gunShotRadius, enemyLayerMask);
+        
         foreach (var enemyCollider in enemyColliders)
         {
             enemyCollider.GetComponent<EnemyAwareness>().isAggro = true;
         }
         
-        // play test audio
-        AudioManager.instance.Play("Shoot");
+        // Play the specific sound for this gun
+        AudioManager.instance.Play(currentGunData.shootSoundName);
         
-        // loop to find and damage enemies inside the trigger zone
         foreach (var enemy in enemyManager.enemiesInTrigger)
         {
-            // get direction to enemy
             var dir = enemy.transform.position - transform.position;
-            
             RaycastHit hit;
-            if (Physics.Raycast(transform.position, dir, out hit, range * 1.5f, raycastLayerMask))
+            if (Physics.Raycast(transform.position, dir, out hit, currentGunData.range * 1.5f, raycastLayerMask))
             {
                 if (hit.transform == enemy.transform)
                 {
-                    // range check
                     float dist = Vector3.Distance(enemy.transform.position, transform.position);
-                    
-                    if (dist > range * 0.5f)
+                    if (dist > currentGunData.range * 0.5f)
                     {
-                        // damage enemy small
-                        enemy.TakeDamage(smallDamage);
-                        Debug.Log("Hit enemy from afar! Small damage applied.");
+                        enemy.TakeDamage(currentGunData.smallDamage);
                     }
                     else
                     {
-                        // damage enemy big
-                        enemy.TakeDamage(bigDamage);
-                        Debug.Log("Hit enemy close up! Big damage applied.");
+                        enemy.TakeDamage(currentGunData.bigDamage);
                     }
                     
-                    // Draw a green line in the Scene view for 2 seconds to show bullet path
                     Debug.DrawRay(transform.position, dir, Color.green, 2f); 
                 }
             }
         }
         
-        //  reset timer for the next shot
-        nextTimeFire = Time.time + fireRate;
-        
-        // fire ammo
-        ammo--;
-        CanvasManager.Instance.UpdateAmmo(ammo);
+        currentAmmo--;
+        CanvasManager.Instance.UpdateAmmo(currentAmmo);
     }
-
+    
     public void GiveAmmo(int amount, GameObject pickup)
     {
-        if (ammo < maxAmmo)
+        if (currentGunData == null) return;
+        
+        if (currentAmmo < currentGunData.maxAmmo)
         {
-            ammo += amount;
+            currentAmmo += amount;
             Destroy(pickup);
         }
-
-        if (ammo > maxAmmo)
+        
+        if (currentAmmo > currentGunData.maxAmmo)
         {
-            ammo = maxAmmo;
+            currentAmmo = currentGunData.maxAmmo;
         }
         
-        CanvasManager.Instance.UpdateAmmo(ammo);
+        CanvasManager.Instance.UpdateAmmo(currentAmmo);
     }
     
     private void OnTriggerEnter(Collider other)
