@@ -2,7 +2,8 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class Enemy : MonoBehaviour
+// Enemy implements IDamageable to receive hits from weapons
+public class Enemy : MonoBehaviour, IDamageable
 {
     public EnemyManager enemyManager;
     private float enemyHealth = 2f;
@@ -13,7 +14,7 @@ public class Enemy : MonoBehaviour
     {
         
     }
-
+    
     void Update()
     {
         if (enemyHealth <= 0)
@@ -22,10 +23,14 @@ public class Enemy : MonoBehaviour
             Destroy(gameObject);
         }
     }
-
+    
+    // This method is required by the IDamageable interface
     public void TakeDamage(float damage)
     {
-        Instantiate(gunHitEffect, transform.position, Quaternion.identity);
+        if (gunHitEffect != null)
+        {
+            Instantiate(gunHitEffect, transform.position, Quaternion.identity);
+        }
         enemyHealth -= damage;
     }
 }

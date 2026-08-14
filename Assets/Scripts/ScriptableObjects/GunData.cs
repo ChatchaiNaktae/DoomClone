@@ -16,6 +16,10 @@ public class GunData : ScriptableObject
     [Header("Damage")]
     public float bigDamage = 2f;
     public float smallDamage = 1f;
+    
+    [Header("Reload Settings")]
+    public float reloadTime = 1.5f;
+    public RuntimeAnimatorController gunAnimatorController;
 
     [Header("Audio")]
     public string shootSoundName = "Shoot"; // Matches the name in AudioManager

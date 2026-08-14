@@ -6,26 +6,36 @@ using UnityEngine.AI;
 
 public class EnemyAI : MonoBehaviour
 {
-    private EnemyAwareness enemyAwareness;
-    private Transform playersTransform;
-    private NavMeshAgent enemyNavMeshAgent;
-
+    public EnemyAwareness enemyAwareness;
+    public Transform playersTransform;
+    public NavMeshAgent enemyNavMeshAgent;
+    
+    private IEnemyState currentState;
+    
     private void Start()
     {
         enemyAwareness = GetComponent<EnemyAwareness>();
         playersTransform = FindObjectOfType<PlayerMovement>().transform;
         enemyNavMeshAgent = GetComponent<NavMeshAgent>();
-    }
 
+        ChangeState(new IdleState());
+    }
+    
     private void Update()
     {
-        if (enemyAwareness.isAggro)
+        if (currentState != null)
         {
-            enemyNavMeshAgent.SetDestination(playersTransform.position);
+            currentState.UpdateState(this);
         }
-        else
+    }
+
+    public void ChangeState(IEnemyState newState)
+    {
+        if (currentState != null)
         {
-            enemyNavMeshAgent.SetDestination(transform.position);
+            currentState.ExitState(this);
         }
+        currentState = newState;
+        currentState.EnterState(this);
     }
 }

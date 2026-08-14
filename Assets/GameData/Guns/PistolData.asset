@@ -19,4 +19,7 @@ MonoBehaviour:
   gunShotRadius: 20
   bigDamage: 2
   smallDamage: 1
+  reloadTime: 1.5
+  gunAnimatorController: {fileID: 9100000, guid: ddb4cf945d4410d44bcd3a24614d1ccf,
+    type: 2}
   shootSoundName: Shoot
