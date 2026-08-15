@@ -10,13 +10,25 @@ public class EnemyAI : MonoBehaviour
     public Transform playersTransform;
     public NavMeshAgent enemyNavMeshAgent;
     
+    public Animator enemyAnimator;
+    
+    [Header("Attack Settings")]
+    public float attackRange = 2.5f;
+    public float attackCooldown = 1.5f;
+    [HideInInspector] public float lastAttackTime;
+    
     private IEnemyState currentState;
+    private float nextActivityTime;
     
     private void Start()
     {
         enemyAwareness = GetComponent<EnemyAwareness>();
         playersTransform = FindObjectOfType<PlayerMovement>().transform;
         enemyNavMeshAgent = GetComponent<NavMeshAgent>();
+        
+        enemyAnimator = GetComponentInChildren<Animator>();
+        
+        nextActivityTime = Time.time + UnityEngine.Random.Range(2f, 5f);
 
         ChangeState(new IdleState());
     }
@@ -26,6 +38,12 @@ public class EnemyAI : MonoBehaviour
         if (currentState != null)
         {
             currentState.UpdateState(this);
+        }
+
+        if (Time.time >= nextActivityTime)
+        {
+            AudioManager.instance.Play3D("ImpActivity", transform.position);
+            nextActivityTime = Time.time + UnityEngine.Random.Range(4f, 8f);
         }
     }
 

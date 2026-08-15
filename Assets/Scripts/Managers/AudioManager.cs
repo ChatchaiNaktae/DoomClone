@@ -56,6 +56,33 @@ public class AudioManager : MonoBehaviour
         s.source.Play();
     }
 
+    public void Play3D(string name, Vector3 position)
+    {
+        Sound s = Array.Find(sounds, sound => sound.name == name);
+        if (s == null)
+        {
+            Debug.LogWarning("Sound: " + name + " not found!");
+            return;
+        }
+        
+        GameObject tempAudioObj = new GameObject("TempAudio_" + name);
+        tempAudioObj.transform.position = position;
+        
+        AudioSource tempSource = tempAudioObj.AddComponent<AudioSource>();
+        tempSource.clip = s.clip;
+        tempSource.volume = s.volume;
+        tempSource.pitch = s.pitch;
+        
+        tempSource.spatialBlend = 1f;
+        tempSource.rolloffMode = AudioRolloffMode.Linear;
+        tempSource.minDistance = 2f;
+        tempSource.maxDistance = 20f;
+        
+        tempSource.Play();
+        
+        Destroy(tempAudioObj, s.clip.length);
+    }
+
     public void PlayFootstep(string surfaceTag)
     {
         FootstepGroup group = Array.Find(footstepGroups, g => g.tag == surfaceTag);

@@ -13,13 +13,13 @@ MonoBehaviour:
   m_Name: PistolData
   m_EditorClassIdentifier: 
   gunName: Pistol
-  fireRate: 0.5
+  fireRate: 0.4
   maxAmmo: 10
-  range: 20
+  range: 64
   gunShotRadius: 20
-  bigDamage: 2
-  smallDamage: 1
+  bigDamage: 15
+  smallDamage: 5
   reloadTime: 1.5
   gunAnimatorController: {fileID: 9100000, guid: ddb4cf945d4410d44bcd3a24614d1ccf,
     type: 2}
-  shootSoundName: Shoot
+  shootSoundName: Pistol_Shoot

@@ -7,16 +7,11 @@ public class EnemyAwareness : MonoBehaviour
 {
     public float awarenessRadius = 8f;
     public bool isAggro;
-    public Material aggroMaterial;
-    private Material originalMaterial; 
-    private MeshRenderer meshRenderer;
     private Transform playerTransform;
     
     private void Start()
     {
         playerTransform = FindObjectOfType<PlayerMovement>().transform;
-        meshRenderer = GetComponent<MeshRenderer>();
-        originalMaterial = meshRenderer.material;
     }
     
     private void Update()
@@ -25,12 +20,10 @@ public class EnemyAwareness : MonoBehaviour
         if (dist < awarenessRadius)
         {
             isAggro = true;
-            meshRenderer.material = aggroMaterial;
         }
         else
         {
             isAggro = false;
-            meshRenderer.material = originalMaterial;
         }
     }
 }

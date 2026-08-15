@@ -51,8 +51,9 @@ public class CanvasManager : MonoBehaviour
 
     public void UpdateHealth(int healthValue, int maxHealthValue)
     {
-        health.text = healthValue.ToString();
-        targetHealthFill = (float)healthValue / (float)maxHealthValue;
+        int clampedHealth = Mathf.Clamp(healthValue, 0, maxHealthValue);
+        health.text = clampedHealth.ToString();
+        targetHealthFill = Mathf.Clamp01((float)clampedHealth / (float)maxHealthValue);
     }
 
     public void UpdateArmor(int armorValue)

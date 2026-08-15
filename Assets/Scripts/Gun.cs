@@ -10,7 +10,7 @@ public class Gun : MonoBehaviour
     
     private CustomTimer fireCooldownTimer;
     private bool canFire = true;
-    private int currentAmmo; 
+    private int currentAmmo;
     
     public LayerMask raycastLayerMask;
     public LayerMask enemyLayerMask;
@@ -31,6 +31,9 @@ public class Gun : MonoBehaviour
     
     [Header("Reload Settings")]
     private bool isReloading = false;
+    
+    [Header("Effects")]
+    public GameObject bulletHolePrefab; 
     
     void Start()
     {
@@ -121,7 +124,11 @@ public class Gun : MonoBehaviour
         
         foreach (var enemyCollider in enemyColliders)
         {
-            enemyCollider.GetComponent<EnemyAwareness>().isAggro = true;
+            EnemyAwareness awareness = enemyCollider.GetComponent<EnemyAwareness>();
+            if (awareness != null)
+            {
+                awareness.isAggro = true;
+            }
         }
         
         AudioManager.instance.Play(currentGunData.shootSoundName);
@@ -131,22 +138,83 @@ public class Gun : MonoBehaviour
             var dir = enemy.transform.position - transform.position;
             RaycastHit hit;
             
-            if (Physics.Raycast(transform.position, dir, out hit, currentGunData.range * 1.5f, raycastLayerMask))
+            if (Physics.Raycast(transform.position, dir, out hit, currentGunData.range, raycastLayerMask))
             {
                 IDamageable target = hit.transform.GetComponent<IDamageable>();
                 if (target != null)
                 {
-                    float dist = Vector3.Distance(hit.transform.position, transform.position);
-                    if (dist > currentGunData.range * 0.5f)
-                    {
-                        target.TakeDamage(currentGunData.smallDamage);
-                    }
-                    else
-                    {
-                        target.TakeDamage(currentGunData.bigDamage);
-                    }
+                    int minDmg = (int)currentGunData.smallDamage;
+                    int maxDmg = (int)currentGunData.bigDamage;
+                    float finalDamage = UnityEngine.Random.Range(minDmg, maxDmg + 1);
+                    
+                    target.TakeDamage(finalDamage);
                     
                     Debug.DrawRay(transform.position, dir, Color.green, 2f); 
+                }
+            }
+        }
+        
+        Transform camTransform = Camera.main.transform; 
+        RaycastHit wallHit;
+        
+        if (Physics.Raycast(camTransform.position, camTransform.forward, out wallHit, currentGunData.range, raycastLayerMask))
+        {
+            IDamageable targetHit = wallHit.transform.GetComponent<IDamageable>();
+            Debug.Log("ยิงโดนวัตถุ: " + wallHit.transform.name + " | มี IDamageable ไหม: " + (targetHit != null));
+            if (targetHit != null)
+            {
+                if (wallHit.transform.GetComponent<Enemy>() == null)
+                {
+                    int minDmg = (int)currentGunData.smallDamage;
+                    int maxDmg = (int)currentGunData.bigDamage;
+                    float finalDamage = UnityEngine.Random.Range(minDmg, maxDmg + 1);
+                    
+                    targetHit.TakeDamage(finalDamage);
+                    Debug.Log("ทำดาเมจใส่ถัง: " + finalDamage);
+                }
+            }
+            else
+            {
+                if (bulletHolePrefab != null)
+                {
+                    Vector3 spawnPos = wallHit.point + (wallHit.normal * 0.01f);
+                    Quaternion spawnRot = Quaternion.LookRotation(-wallHit.normal);
+                    
+                    float randomRoll = UnityEngine.Random.Range(0f, 360f);
+                    spawnRot *= Quaternion.Euler(0f, 0f, randomRoll);
+                    
+                    GameObject hole = Instantiate(bulletHolePrefab, spawnPos, spawnRot);
+                    hole.transform.SetParent(wallHit.transform);
+                    
+                    Renderer wallRenderer = wallHit.transform.GetComponent<Renderer>();
+                    if (wallRenderer != null)
+                    {
+                        Color wallColor = Color.white;
+                        
+                        if (wallRenderer.material.HasProperty("_BaseColor"))
+                        {
+                            wallColor = wallRenderer.material.GetColor("_BaseColor");
+                        }
+                        else if (wallRenderer.material.HasProperty("_Color"))
+                        {
+                            wallColor = wallRenderer.material.color;
+                        }
+                        
+                        Renderer holeRenderer = hole.GetComponent<Renderer>();
+                        if (holeRenderer != null)
+                        {
+                            if (holeRenderer.material.HasProperty("_BaseColor"))
+                            {
+                                holeRenderer.material.SetColor("_BaseColor", wallColor);
+                            }
+                            else if (holeRenderer.material.HasProperty("_Color"))
+                            {
+                                holeRenderer.material.color = wallColor;
+                            }
+                        }
+                    }
+                    
+                    Destroy(hole, 10f);
                 }
             }
         }
