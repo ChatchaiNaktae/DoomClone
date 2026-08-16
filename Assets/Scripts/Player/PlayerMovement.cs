@@ -37,6 +37,17 @@ public class PlayerMovement : NetworkBehaviour
     
     void Update()
     {
+        if (PauseMenuController.IsPaused)
+        {
+            if (isWalking)
+            {
+                isWalking = false;
+                if (cameraAnimator != null)
+                    cameraAnimator.SetBool("isWalking", false);
+            }
+            return;
+        }
+        
         if (!IsOwner || controller == null || !controller.enabled)
         {
             return;

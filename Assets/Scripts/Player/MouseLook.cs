@@ -42,6 +42,11 @@ public class MouseLook : NetworkBehaviour
     
     void Update()
     {
+        if (PauseMenuController.IsPaused)
+        {
+            return;
+        }
+        
         if (!IsOwner)
         {
             return;

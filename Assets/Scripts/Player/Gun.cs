@@ -32,6 +32,7 @@ public class Gun : NetworkBehaviour
     
     [Header("Reload Settings")]
     private bool isReloading = false;
+    private Coroutine reloadCoroutine;
     
     [Header("Effects")]
     public GameObject bulletHolePrefab; 
@@ -107,6 +108,11 @@ public class Gun : NetworkBehaviour
     
     void Update()
     {
+        if (PauseMenuController.IsPaused)
+        {
+            return;
+        }
+        
         if (!IsOwner)
         {
             return;
@@ -121,7 +127,8 @@ public class Gun : NetworkBehaviour
         {
             if (currentAmmo <= 0 || (Input.GetKeyDown(KeyCode.R) && currentAmmo < currentGunData.maxAmmo))
             {
-                StartCoroutine(ReloadRoutine());
+                if (reloadCoroutine != null) StopCoroutine(reloadCoroutine);
+                reloadCoroutine = StartCoroutine(ReloadRoutine());
             }
         }
         
@@ -253,7 +260,7 @@ public class Gun : NetworkBehaviour
     [ClientRpc]
     private void SpawnBulletHoleClientRpc(Vector3 point, Vector3 normal)
     {
-        if (IsOwner) return; // เจ้าของเครื่องสร้างไปแล้วตอนกดยิง ไม่ต้องสร้างซ้ำ
+        if (IsOwner) return;
         SpawnBulletHole(point, normal, null);
     }
     
@@ -296,6 +303,7 @@ public class Gun : NetworkBehaviour
         }
         
         isReloading = false;
+        reloadCoroutine = null;
         Debug.Log("Reload Complete!");
     }
     
