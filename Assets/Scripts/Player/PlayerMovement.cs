@@ -101,6 +101,7 @@ public class PlayerMovement : NetworkBehaviour
             if (plrCamera != null)
             {
                 plrCamera.enabled = true;
+                plrCamera.tag = "MainCamera";
             }
             if (audioListener != null)
             {
