@@ -29,6 +29,7 @@ public class NetworkDiscoveryManager : MonoBehaviour
         public int currentPlayers;
         public int maxPlayers;
         public string gameStatus;
+        public string relayCode;
         public float lastSeenTimestamp;
     }
     
@@ -47,7 +48,6 @@ public class NetworkDiscoveryManager : MonoBehaviour
     
     private void Update()
     {
-        // 1. Host Broadcasts Room Info
         if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer && !MainMenuController.isSingleplayerMode)
         {
             broadcastTimer += Time.deltaTime;
@@ -58,7 +58,6 @@ public class NetworkDiscoveryManager : MonoBehaviour
             }
         }
         
-        // 2. Process incoming packets on Unity's Main Thread
         lock (incomingQueue)
         {
             while (incomingQueue.Count > 0)
@@ -70,7 +69,6 @@ public class NetworkDiscoveryManager : MonoBehaviour
             }
         }
         
-        // 3. Clean Up Stale Servers (> 4s timeout)
         PruneStaleServers();
     }
     
@@ -118,6 +116,8 @@ public class NetworkDiscoveryManager : MonoBehaviour
                 string ip = senderIPEP.Address.ToString();
                 if (ip == "::1" || ip == "0.0.0.0") ip = "127.0.0.1";
                 
+                string relayCode = (parts.Length >= 6) ? parts[5] : "";
+                
                 DiscoveredServer server = new DiscoveredServer
                 {
                     serverName = parts[0],
@@ -126,6 +126,7 @@ public class NetworkDiscoveryManager : MonoBehaviour
                     currentPlayers = int.Parse(parts[2]),
                     maxPlayers = int.Parse(parts[3]),
                     gameStatus = parts[4],
+                    relayCode = relayCode,
                     lastSeenTimestamp = 0f
                 };
                 
@@ -135,7 +136,6 @@ public class NetworkDiscoveryManager : MonoBehaviour
                 }
             }
             
-            // Listen for next packet
             if (isListening && listenerSocket != null)
             {
                 EndPoint newSenderEP = new IPEndPoint(IPAddress.Any, 0);
@@ -154,7 +154,12 @@ public class NetworkDiscoveryManager : MonoBehaviour
         isListening = false;
         if (listenerSocket != null)
         {
-            listenerSocket.Close();
+            try
+            {
+                listenerSocket.Close();
+                listenerSocket.Dispose();
+            }
+            catch {}
             listenerSocket = null;
         }
     }
@@ -170,8 +175,10 @@ public class NetworkDiscoveryManager : MonoBehaviour
         string currentScene = SceneManager.GetActiveScene().name;
         string status = (currentScene == "MainMenu") ? "In Lobby" : "In Game";
         int currentCount = NetworkManager.Singleton.ConnectedClientsIds.Count;
+        string relayCode = (RelayManager.Instance != null) ? RelayManager.Instance.CurrentJoinCode : "";
         
-        string payload = $"{GameConfig.serverName}|7777|{currentCount}|{GameConfig.maxPlayers}|{status}";
+        // Format: ServerName|Port|CurrentCount|MaxCount|Status|RelayCode
+        string payload = $"{GameConfig.serverName}|7777|{currentCount}|{GameConfig.maxPlayers}|{status}|{relayCode}";
         byte[] bytes = Encoding.UTF8.GetBytes(payload);
         
         try
@@ -207,6 +214,7 @@ public class NetworkDiscoveryManager : MonoBehaviour
         if (broadcastSocket != null)
         {
             broadcastSocket.Close();
+            broadcastSocket.Dispose();
             broadcastSocket = null;
         }
     }

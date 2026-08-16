@@ -5,6 +5,7 @@ using UnityEngine.UI;
 using UnityEngine.SceneManagement;
 using TMPro;
 using Unity.Netcode;
+using System.Threading.Tasks;
 
 public class MainMenuController : MonoBehaviour
 {
@@ -39,6 +40,8 @@ public class MainMenuController : MonoBehaviour
     public GameObject playerEntryPrefab;
     public Button startGameButton;
     public Button leaveLobbyButton;
+    public TextMeshProUGUI roomCodeText;
+    public Button copyCodeButton;
     
     [Header("Server List UI")]
     public GameObject serverListPanel;
@@ -48,6 +51,8 @@ public class MainMenuController : MonoBehaviour
     public Button serverListBackButton;
     public Transform serverListContent;
     public GameObject serverEntryPrefab;
+    public TMP_InputField joinCodeInputField;
+    public Button joinByCodeButton;
     
     public static bool isSingleplayerMode = false;
     
@@ -80,8 +85,11 @@ public class MainMenuController : MonoBehaviour
         // Lobby Room Bindings
         if (startGameButton != null) startGameButton.onClick.AddListener(OnStartGameClicked);
         if (leaveLobbyButton != null) leaveLobbyButton.onClick.AddListener(OnLeaveLobbyClicked);
+        if (copyCodeButton != null) copyCodeButton.onClick.AddListener(OnCopyCodeClicked);
         
+        // Server List & Direct Connect Bindings
         if (connectButton != null) connectButton.onClick.AddListener(OnConnectByIPClicked);
+        if (joinByCodeButton != null) joinByCodeButton.onClick.AddListener(OnJoinByCodeClicked);
         if (serverListBackButton != null) serverListBackButton.onClick.AddListener(OnServerListBackClicked);
         
         if (serverListPanel != null) serverListPanel.SetActive(false);
@@ -152,10 +160,29 @@ public class MainMenuController : MonoBehaviour
         if (monsterDamageText != null) monsterDamageText.text = $"Monster Damage: {value:F1}x";
     }
     
-    private void LaunchHostLobby()
+    private async void LaunchHostLobby()
     {
         if (friendlyFireToggle != null) GameConfig.friendlyFire = friendlyFireToggle.isOn;
         isSingleplayerMode = false;
+        
+        string joinCode = null;
+        
+        // 1. Request Relay Join Code from Unity Services
+        if (RelayManager.Instance != null)
+        {
+            joinCode = await RelayManager.Instance.CreateRelayHostAsync(GameConfig.maxPlayers);
+        }
+        
+        // 2. Fallback to Direct LAN if Relay is unavailable
+        if (string.IsNullOrEmpty(joinCode))
+        {
+            Debug.LogWarning("[MainMenu] Starting in Local Direct IP/LAN Mode.");
+            var transport = NetworkManager.Singleton.GetComponent<Unity.Netcode.Transports.UTP.UnityTransport>();
+            if (transport != null)
+            {
+                transport.SetConnectionData("0.0.0.0", 7777);
+            }
+        }
         
         StartHostSession();
         OpenLobbyUI(isHost: true);
@@ -182,7 +209,6 @@ public class MainMenuController : MonoBehaviour
             NetworkManager.Singleton.OnClientConnectedCallback -= OnClientConnectedCallbackHandler;
             NetworkManager.Singleton.OnClientConnectedCallback += OnClientConnectedCallbackHandler;
             
-            // Subscribe SceneManager event safely after Host starts
             if (NetworkManager.Singleton.SceneManager != null)
             {
                 NetworkManager.Singleton.SceneManager.OnLoadEventCompleted -= OnSceneLoadedComplete;
@@ -268,14 +294,8 @@ public class MainMenuController : MonoBehaviour
         }
     }
     
-    public void ConnectToServer(string ip, ushort port)
+    public async void ConnectToServer(string ip, ushort port)
     {
-        var transport = NetworkManager.Singleton.GetComponent<Unity.Netcode.Transports.UTP.UnityTransport>();
-        if (transport != null)
-        {
-            transport.SetConnectionData(ip, port);
-        }
-        
         if (NetworkDiscoveryManager.Instance != null)
         {
             NetworkDiscoveryManager.Instance.StopListening();
@@ -283,17 +303,53 @@ public class MainMenuController : MonoBehaviour
         
         if (serverListPanel != null)
             serverListPanel.SetActive(false);
+        
+        // Find server data to inspect Relay Code
+        string serverKey = $"{GameConfig.serverName}_{port}";
+        string relayCode = "";
+        
+        if (NetworkDiscoveryManager.Instance != null && 
+            NetworkDiscoveryManager.Instance.discoveredServers.TryGetValue(serverKey, out var server))
+        {
+            relayCode = server.relayCode;
+        }
+        
+        // If Relay Code exists, connect via Relay Service
+        if (!string.IsNullOrEmpty(relayCode) && RelayManager.Instance != null)
+        {
+            Debug.Log($"[MainMenu] Joining via Discovered Relay Code: {relayCode}");
+            bool success = await RelayManager.Instance.JoinRelayAsync(relayCode);
+            if (success)
+            {
+                StartJoinGame();
+                return;
+            }
+        }
+        
+        // Fallback to Direct IP connection
+        Debug.Log($"[MainMenu] Joining via Direct IP: {ip}:{port}");
+        var transport = NetworkManager.Singleton.GetComponent<Unity.Netcode.Transports.UTP.UnityTransport>();
+        if (transport != null)
+        {
+            transport.SetConnectionData(ip, port);
+        }
+        
         StartJoinGame();
     }
     
     private void OnConnectByIPClicked()
     {
-        string targetIP = string.IsNullOrEmpty(ipInputField.text) ? "127.0.0.1" : ipInputField.text;
+        string targetIP = string.IsNullOrEmpty(ipInputField.text) ? "127.0.0.1" : ipInputField.text.Trim();
         ushort targetPort = 7777;
         
         if (portInputField != null && !string.IsNullOrEmpty(portInputField.text))
         {
-            ushort.TryParse(portInputField.text, out targetPort);
+            ushort.TryParse(portInputField.text.Trim(), out targetPort);
+        }
+        
+        if (NetworkDiscoveryManager.Instance != null)
+        {
+            NetworkDiscoveryManager.Instance.StopListening();
         }
         
         var transport = NetworkManager.Singleton.GetComponent<Unity.Netcode.Transports.UTP.UnityTransport>();
@@ -302,8 +358,43 @@ public class MainMenuController : MonoBehaviour
             transport.SetConnectionData(targetIP, targetPort);
         }
         
-        if (serverListPanel != null) serverListPanel.SetActive(false);
+        if (serverListPanel != null)
+            serverListPanel.SetActive(false);
+        
         StartJoinGame();
+    }
+    
+    private async void OnJoinByCodeClicked()
+    {
+        if (joinCodeInputField == null || string.IsNullOrEmpty(joinCodeInputField.text))
+        {
+            Debug.LogWarning("[MainMenu] Please enter a valid Room Code.");
+            return;
+        }
+        
+        string code = joinCodeInputField.text.Trim().ToUpper();
+        if (RelayManager.Instance != null)
+        {
+            bool success = await RelayManager.Instance.JoinRelayAsync(code);
+            if (success)
+            {
+                if (serverListPanel != null) serverListPanel.SetActive(false);
+                StartJoinGame();
+            }
+            else
+            {
+                Debug.LogError("[MainMenu] Failed to join with the provided Room Code.");
+            }
+        }
+    }
+    
+    private void OnCopyCodeClicked()
+    {
+        if (RelayManager.Instance != null && !string.IsNullOrEmpty(RelayManager.Instance.CurrentJoinCode))
+        {
+            GUIUtility.systemCopyBuffer = RelayManager.Instance.CurrentJoinCode;
+            Debug.Log("[MainMenu] Copied Room Code to clipboard: " + RelayManager.Instance.CurrentJoinCode);
+        }
     }
     
     public void StartJoinGame()
@@ -318,7 +409,7 @@ public class MainMenuController : MonoBehaviour
             if (NetworkManager.Singleton.IsListening) NetworkManager.Singleton.Shutdown();
             
             NetworkManager.Singleton.StartClient();
-            StartCoroutine(CheckConnectionRoutine(4f));
+            StartCoroutine(CheckConnectionRoutine(6f));
         }
     }
     
@@ -355,16 +446,28 @@ public class MainMenuController : MonoBehaviour
     {
         if (SceneManager.GetActiveScene().name != "MainMenu") return;
         
-        if (menuContainer != null)
-            menuContainer.SetActive(false);
-        if (hostConfigPanel != null)
-            hostConfigPanel.SetActive(false);
-        if (lobbyPanel != null)
-            lobbyPanel.SetActive(true);
+        if (menuContainer != null) menuContainer.SetActive(false);
+        if (hostConfigPanel != null) hostConfigPanel.SetActive(false);
+        if (lobbyPanel != null) lobbyPanel.SetActive(true);
         
-        if (startGameButton != null)
+        if (pingUpdateCoroutine != null) StopCoroutine(pingUpdateCoroutine);
+        pingUpdateCoroutine = StartCoroutine(UpdatePingRoutine());
+        
+        if (startGameButton != null) startGameButton.gameObject.SetActive(isHost);
+        
+        // Update Room Code Display
+        if (roomCodeText != null)
         {
-            startGameButton.gameObject.SetActive(isHost);
+            string code = RelayManager.Instance != null && !string.IsNullOrEmpty(RelayManager.Instance.CurrentJoinCode)
+                ? RelayManager.Instance.CurrentJoinCode
+                : "LAN MODE";
+            roomCodeText.text = $"ROOM CODE: {code}";
+        }
+        
+        if (copyCodeButton != null)
+        {
+            bool hasCode = RelayManager.Instance != null && !string.IsNullOrEmpty(RelayManager.Instance.CurrentJoinCode);
+            copyCodeButton.gameObject.SetActive(hasCode);
         }
         
         RefreshPlayerList();
@@ -378,7 +481,6 @@ public class MainMenuController : MonoBehaviour
         }
     }
     
-    // Spawn player objects for all clients when scene load finishes
     private void OnSceneLoadedComplete(string sceneName, LoadSceneMode loadSceneMode, List<ulong> clientsCompleted, List<ulong> clientsTimedOut)
     {
         if (!NetworkManager.Singleton.IsServer) return;
@@ -410,7 +512,6 @@ public class MainMenuController : MonoBehaviour
     
     private void OnClientConnectedCallbackHandler(ulong clientId)
     {
-        // Late-join: If game is already active in DoomClone, spawn the late player immediately
         if (NetworkManager.Singleton.IsServer && SceneManager.GetActiveScene().name == gameplaySceneName)
         {
             GameObject playerPrefab = NetworkManager.Singleton.NetworkConfig.PlayerPrefab;
@@ -430,10 +531,14 @@ public class MainMenuController : MonoBehaviour
             NetworkManager.Singleton.Shutdown();
         }
         
-        if (lobbyPanel != null)
-            lobbyPanel.SetActive(false);
-        if (menuContainer != null)
-            menuContainer.SetActive(true);
+        if (lobbyPanel != null) lobbyPanel.SetActive(false);
+        if (menuContainer != null) menuContainer.SetActive(true);
+        
+        if (pingUpdateCoroutine != null)
+        {
+            StopCoroutine(pingUpdateCoroutine);
+            pingUpdateCoroutine = null;
+        }
         
         if (SceneManager.GetActiveScene().name != "MainMenu")
         {
@@ -447,7 +552,6 @@ public class MainMenuController : MonoBehaviour
     
     private void OnPlayerDisconnected(ulong clientId)
     {
-        // Handle disconnection only when currently in the MainMenu scene
         if (SceneManager.GetActiveScene().name == "MainMenu")
         {
             if (NetworkManager.Singleton != null && !NetworkManager.Singleton.IsServer)
@@ -459,7 +563,6 @@ public class MainMenuController : MonoBehaviour
                 RefreshPlayerList();
             }
         }
-        // If inside gameplay scenes like DoomClone, let NetworkDisconnectHandler manage Host Migration
     }
     
     private void RefreshPlayerList()
@@ -476,15 +579,57 @@ public class MainMenuController : MonoBehaviour
         foreach (ulong id in NetworkManager.Singleton.ConnectedClientsIds)
         {
             GameObject entry = Instantiate(playerEntryPrefab, playerListContainer);
-            TextMeshProUGUI nameText = entry.transform.Find("Text_PlayerName")?.GetComponent<TextMeshProUGUI>();
+            PlayerEntryUI entryUI = entry.GetComponent<PlayerEntryUI>();
             
-            if (nameText != null)
+            bool isHostPlayer = (id == NetworkManager.Singleton.LocalClientId && NetworkManager.Singleton.IsServer) || id == 0;
+            string displayName = $"Player {playerSlotIndex}";
+            
+            if (entryUI != null)
             {
-                bool isHostPlayer = (id == NetworkManager.Singleton.LocalClientId && NetworkManager.Singleton.IsServer) || id == 0;
-                nameText.text = isHostPlayer ? $"Player {playerSlotIndex} [HOST]" : $"Player {playerSlotIndex}";
+                entryUI.Setup(id, displayName, isHostPlayer);
             }
             
             playerSlotIndex++;
+        }
+    }
+    
+    private Coroutine pingUpdateCoroutine;
+    
+    private IEnumerator UpdatePingRoutine()
+    {
+        while (lobbyPanel != null && lobbyPanel.activeSelf)
+        {
+            if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
+            {
+                var transport = NetworkManager.Singleton.GetComponent<Unity.Netcode.Transports.UTP.UnityTransport>();
+                if (transport != null && playerListContainer != null)
+                {
+                    foreach (Transform child in playerListContainer)
+                    {
+                        var entryUI = child.GetComponent<PlayerEntryUI>();
+                        if (entryUI != null)
+                        {
+                            ulong targetId = entryUI.TargetClientId;
+                            ulong rttValue = 0;
+                            
+                            if (NetworkManager.Singleton.IsServer)
+                            {
+                                // Host
+                                rttValue = transport.GetCurrentRtt(targetId);
+                            }
+                            else
+                            {
+                                // Client
+                                rttValue = transport.GetCurrentRtt(NetworkManager.ServerClientId);
+                            }
+                            
+                            entryUI.UpdatePingDisplay((int)rttValue);
+                        }
+                    }
+                }
+            }
+            
+            yield return new WaitForSeconds(1.0f);
         }
     }
     

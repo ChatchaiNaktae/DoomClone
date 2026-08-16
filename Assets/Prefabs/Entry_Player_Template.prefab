@@ -146,6 +146,7 @@ GameObject:
   - component: {fileID: 3733458193573673902}
   - component: {fileID: 8407118030714050960}
   - component: {fileID: 1278712461763872807}
+  - component: {fileID: 1351880435011764865}
   m_Layer: 5
   m_Name: Entry_Player_Template
   m_TagString: Untagged
@@ -233,6 +234,21 @@ MonoBehaviour:
   m_FillOrigin: 0
   m_UseSpriteMesh: 0
   m_PixelsPerUnitMultiplier: 1
+--- !u!114 &1351880435011764865
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1685404972050593973}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 85fe2b1ebebd8f64c94fca5cb95e9851, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  playerNameText: {fileID: 4039723731986633192}
+  pingText: {fileID: 8491242260920614742}
+  pingIndicatorImage: {fileID: 915775044836930355}
 --- !u!1 &2858743399852619094
 GameObject:
   m_ObjectHideFlags: 0
