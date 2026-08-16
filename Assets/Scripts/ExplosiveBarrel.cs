@@ -1,7 +1,10 @@
+using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
+using Unity.Netcode;
 
 // Barrel uses both IDamageable and IExplosive interfaces
-public class ExplosiveBarrel : MonoBehaviour, IDamageable, IExplosive
+public class ExplosiveBarrel : NetworkBehaviour, IDamageable, IExplosive
 {
     public float health = 20f;
     public float explosionRadius = 4f;
@@ -22,6 +25,14 @@ public class ExplosiveBarrel : MonoBehaviour, IDamageable, IExplosive
     {
         if (hasExploded) return;
         
+        RequestDamageServerRpc(damage);
+    }
+    
+    [ServerRpc(RequireOwnership = false)]
+    private void RequestDamageServerRpc(float damage)
+    {
+        if (hasExploded) return;
+        
         health -= damage;
         Debug.Log("Barrel took " + damage + " damage. Current Health: " + health);
         
@@ -37,18 +48,7 @@ public class ExplosiveBarrel : MonoBehaviour, IDamageable, IExplosive
         if (hasExploded) return;
         hasExploded = true;
         
-        Debug.Log("Barrel EXPLODED!");
-        
-        if (explosionEffect != null)
-        {
-            Vector3 spawnPos = transform.position + new Vector3(0f, 1f, 0f);
-            GameObject spawnedEffect = Instantiate(explosionEffect, spawnPos, Quaternion.identity);
-            Destroy(spawnedEffect, 0.15f);
-        }
-        else
-        {
-            Debug.LogWarning("Explosion Effect Prefab is missing in Inspector!");
-        }
+        Debug.Log("Barrel EXPLODED on Server!");
         
         Collider[] colliders = Physics.OverlapSphere(transform.position, explosionRadius);
         foreach (Collider hit in colliders)
@@ -71,13 +71,24 @@ public class ExplosiveBarrel : MonoBehaviour, IDamageable, IExplosive
             }
         }
         
+        ExplodeClientRpc();
+    }
+    
+    [ClientRpc]
+    private void ExplodeClientRpc()
+    {
+        hasExploded = true;
+        
+        if (explosionEffect != null)
+        {
+            Vector3 spawnPos = transform.position + new Vector3(0f, 1f, 0f);
+            GameObject spawnedEffect = Instantiate(explosionEffect, spawnPos, Quaternion.identity);
+            Destroy(spawnedEffect, 0.15f);
+        }
+        
         if (barrelAnimator != null)
         {
             barrelAnimator.SetTrigger("ExplodeTrigger");
-        }
-        else
-        {
-            Debug.LogWarning("Animator not found on Barrel or its children!");
         }
         
         if (barrelCollider != null)

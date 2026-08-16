@@ -4,17 +4,30 @@ using UnityEngine;
 
 public class SpriteRotator : MonoBehaviour
 {
-    private Transform target;
+    private Transform targetCamera;
     
-    // Start is called before the first frame update
-    void Start()
-    {
-        target = FindObjectOfType<PlayerMovement>().transform;
-    }
-
     // Update is called once per frame
-    void Update()
+    private void Update()
     {
-        transform.LookAt(target);
+        if (targetCamera == null || !targetCamera.gameObject.activeInHierarchy)
+        {
+            FindActiveCamera();
+            if (targetCamera == null) return;
+        }
+
+        transform.LookAt(targetCamera);
+    }
+    
+    private void FindActiveCamera()
+    {
+        Camera[] allCams = FindObjectsOfType<Camera>();
+        foreach (Camera cam in allCams)
+        {
+            if (cam.enabled && cam.gameObject.activeInHierarchy && cam.gameObject.name != "LobbyCamera")
+            {
+                targetCamera = cam.transform;
+                break;
+            }
+        }
     }
 }

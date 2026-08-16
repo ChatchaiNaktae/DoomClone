@@ -2,9 +2,10 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AI;
+using Unity.Netcode;
 
 // Enemy implements IDamageable to receive hits from weapons
-public class Enemy : MonoBehaviour, IDamageable
+public class Enemy : NetworkBehaviour, IDamageable
 {
     private EnemyManager enemyManager;
     private Animator spriteAnim;
@@ -28,11 +29,6 @@ public class Enemy : MonoBehaviour, IDamageable
         
         // beginning of update set the animations rotational index
         spriteAnim.SetFloat("spriteRot", angleToPlayer.lastIndex);
-        
-        if (enemyHealth <= 0)
-        {   
-            Die();
-        }
     }
     
     // This method is required by the IDamageable interface
@@ -40,24 +36,65 @@ public class Enemy : MonoBehaviour, IDamageable
     {
         if (isDead) return;
         
+        RequestDamageServerRpc(damage);
+    }
+    
+    [ServerRpc(RequireOwnership = false)]
+    private void RequestDamageServerRpc(float damage)
+    {
+        if (isDead) return;
+        
+        enemyHealth -= damage;
+        
+        PlayHitEffectClientRpc();
+        
+        if (enemyHealth <= 0)
+        {   
+            Die();
+        }
+    }
+    
+    [ClientRpc]
+    private void PlayHitEffectClientRpc()
+    {
         if (gunHitEffect != null)
         {
             Instantiate(gunHitEffect, transform.position, Quaternion.identity);
         }
-        enemyHealth -= damage;
     }
-
+    
     private void Die()
     {
         isDead = true;
-        AudioManager.instance.Play3D($"ImpDeath{Random.Range(1, 3)}", transform.position);
-        spriteAnim.SetTrigger("DeathTrigger");
+        
+        DieClientRpc();
+    }
+    
+    [ClientRpc]
+    private void DieClientRpc()
+    {
+        isDead = true;
+        if (AudioManager.instance != null)
+        {
+            AudioManager.instance.Play3D($"ImpDeath{Random.Range(1, 3)}", transform.position);
+        }
+        
+        if (spriteAnim != null)
+        {
+            spriteAnim.SetTrigger("DeathTrigger");
+        }
+        
         if (enemyManager != null)
         {
             enemyManager.RemoveEnemy(this);
         }
-        GetComponent<EnemyAI>().enabled = false;
-        GetComponent<NavMeshAgent>().enabled = false;
+        
+        EnemyAI ai = GetComponent<EnemyAI>();
+        if (ai != null) ai.enabled = false;
+        
+        NavMeshAgent agent = GetComponent<NavMeshAgent>();
+        if (agent != null) agent.enabled = false;
+        
         Collider enemyCollider = GetComponent<Collider>();
         if (enemyCollider != null)
         {

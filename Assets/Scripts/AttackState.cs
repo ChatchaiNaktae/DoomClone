@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using Unity.Netcode;
 
 public class AttackState : IEnemyState
 {
@@ -8,18 +9,25 @@ public class AttackState : IEnemyState
     {
         Debug.Log("Enemy is Attacking!");
         
-        enemy.enemyNavMeshAgent.isStopped = true;
+        if (enemy.enemyNavMeshAgent != null && enemy.enemyNavMeshAgent.enabled)
+        {
+            enemy.enemyNavMeshAgent.isStopped = true;
+        }
+        
         if (enemy.enemyAnimator != null)
         {
             enemy.enemyAnimator.SetTrigger("AttackTrigger");
         }
         
-        if (enemy.playersTransform != null)
+        if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer)
         {
-            PlayerHealth playerHealth = enemy.playersTransform.GetComponent<PlayerHealth>();
-            if (playerHealth != null)
+            if (enemy.playersTransform != null)
             {
-                playerHealth.DamagePlayer(15); 
+                PlayerHealth playerHealth = enemy.playersTransform.GetComponent<PlayerHealth>();
+                if (playerHealth != null)
+                {
+                    playerHealth.DamagePlayer(15); 
+                }
             }
         }
         
@@ -36,6 +44,9 @@ public class AttackState : IEnemyState
     
     public void ExitState(EnemyAI enemy)
     {
-        enemy.enemyNavMeshAgent.isStopped = false;
+        if (enemy.enemyNavMeshAgent != null && enemy.enemyNavMeshAgent.enabled)
+        {
+            enemy.enemyNavMeshAgent.isStopped = false;
+        }
     }
 }

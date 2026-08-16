@@ -5,25 +5,39 @@ using UnityEngine;
 
 public class EnemySpriteLook : MonoBehaviour
 {
-    private Transform target;
+    private Transform targetCamera;
     public bool canLookVertically;
-
-    private void Start()
-    {
-        target = FindObjectOfType<PlayerMovement>().transform;
-    }
-
+    
     private void Update()
     {
+        if (targetCamera == null || !targetCamera.gameObject.activeInHierarchy)
+        {
+            FindActiveCamera();
+            if (targetCamera == null) return;
+        }
+        
         if (canLookVertically)
         {
-            transform.LookAt(target);
+            transform.LookAt(targetCamera);
         }
         else
         {
-            Vector3 modifielldTarget = target.position;
-            modifielldTarget.y = transform.position.y;
-            transform.LookAt(modifielldTarget);
+            Vector3 modifiedTarget = targetCamera.position;
+            modifiedTarget.y = transform.position.y;
+            transform.LookAt(modifiedTarget);
+        }
+    }
+    
+    private void FindActiveCamera()
+    {
+        Camera[] allCams = FindObjectsOfType<Camera>();
+        foreach (Camera cam in allCams)
+        {
+            if (cam.enabled && cam.gameObject.activeInHierarchy && cam.gameObject.name != "LobbyCamera")
+            {
+                targetCamera = cam.transform;
+                break;
+            }
         }
     }
 }

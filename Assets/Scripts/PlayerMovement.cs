@@ -1,8 +1,9 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using Unity.Netcode;
 
-public class PlayerMovement : MonoBehaviour
+public class PlayerMovement : NetworkBehaviour
 {
     public float speed = 10f;
     public float smoothTime = 0.15f; 
@@ -17,20 +18,36 @@ public class PlayerMovement : MonoBehaviour
     
     private SpringVector3 momentumSpring;
     
-    void Start()
+    void Awake()
     {
         controller = GetComponent<CharacterController>();
-        
+    }
+    
+    void Start()
+    {
         // Initialize the spring with zero velocity
         momentumSpring = new SpringVector3(Vector3.zero, smoothTime);
+        
+        if (cameraAnimator == null)
+        {
+            cameraAnimator = GetComponentInChildren<Animator>();
+        }
     }
     
     void Update()
     {
+        if (!IsOwner)
+        {
+            return;
+        }
+        
         GetInput();
         MovePlayer();
         
-        cameraAnimator.SetBool("isWalking", isWalking);
+        if (cameraAnimator != null)
+        {
+            cameraAnimator.SetBool("isWalking", isWalking);
+        }
     }
     
     void GetInput()
@@ -64,6 +81,52 @@ public class PlayerMovement : MonoBehaviour
     
     void MovePlayer()
     {
-        controller.Move(movementVector * Time.deltaTime);
+        if (controller != null && controller.enabled)
+        {
+            controller.Move(movementVector * Time.deltaTime);
+        }
+    }
+
+    public override void OnNetworkSpawn()
+    {
+        base.OnNetworkSpawn();
+        
+        Camera plrCamera = GetComponentInChildren<Camera>();
+        AudioListener audioListener = GetComponentInChildren<AudioListener>();
+        CharacterController charController = GetComponent<CharacterController>();
+
+        if (IsOwner)
+        {
+            // if it is your character, turn on the camera and audio system.
+            if (plrCamera != null)
+            {
+                plrCamera.enabled = true;
+            }
+            if (audioListener != null)
+            {
+                audioListener.enabled = true;
+            }
+            if (charController != null)
+            {
+                charController.enabled = true;
+            }
+        }
+        else
+        {
+            // if it is a friend's character, turn off the camera and audio system.
+            if (plrCamera != null)
+            {
+                plrCamera.enabled = false;
+            }
+            if (audioListener != null)
+            {
+                audioListener.enabled = false;
+            }
+
+            if (charController != null)
+            {
+                charController.enabled = false;
+            }
+        }
     }
 }

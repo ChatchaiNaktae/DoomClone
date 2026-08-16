@@ -1,14 +1,20 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using Unity.Netcode;
 
-public class ItemPickup : MonoBehaviour
+public class ItemPickup : NetworkBehaviour
 {
     [Header("Item Configuration")]
     public ItemData itemData; 
     
+    private bool hasBeenPickedUp = false;
+    
     void OnTriggerEnter(Collider other)
     {
+        if (!IsServer) return;
+        if (hasBeenPickedUp) return;
+        
         if (other.CompareTag("Player"))
         {
             if (itemData == null)
@@ -17,16 +23,18 @@ public class ItemPickup : MonoBehaviour
                 return;
             }
             
+            hasBeenPickedUp = true;
+            
             switch (itemData.itemType)
             {
                 case ItemType.Health:
-                    other.GetComponent<PlayerHealth>().GiveHealth(itemData.amount, this.gameObject);
+                    other.GetComponent<PlayerHealth>()?.GiveHealth(itemData.amount, this.gameObject);
                     break;
                 case ItemType.Armor:
-                    other.GetComponent<PlayerHealth>().GiveArmor(itemData.amount, this.gameObject);
+                    other.GetComponent<PlayerHealth>()?.GiveArmor(itemData.amount, this.gameObject);
                     break;
                 case ItemType.Ammo:
-                    other.GetComponentInChildren<Gun>().GiveAmmo(itemData.amount, this.gameObject);
+                    other.GetComponentInChildren<Gun>()?.GiveAmmo(itemData.amount, this.gameObject);
                     break;
                 
                 // Add logic for picking up a gun
@@ -34,10 +42,8 @@ public class ItemPickup : MonoBehaviour
                     if (itemData.gunData != null)
                     {
                         // Equip the new gun using the data stored in the item
-                        other.GetComponentInChildren<Gun>().EquipGun(itemData.gunData);
-                        
-                        // Destroy the pickup object from the scene
-                        Destroy(this.gameObject);
+                        other.GetComponentInChildren<Gun>()?.EquipGun(itemData.gunData);
+                        DestroyPickup();
                     }
                     else
                     {
@@ -46,5 +52,10 @@ public class ItemPickup : MonoBehaviour
                     break;
             }
         }
+    }
+    
+    private void DestroyPickup()
+    {
+        NetworkUtils.DespawnOrDestroy(gameObject);
     }
 }

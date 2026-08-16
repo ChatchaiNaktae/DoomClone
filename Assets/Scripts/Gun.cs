@@ -2,8 +2,9 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using Unity.Netcode;
 
-public class Gun : MonoBehaviour
+public class Gun : NetworkBehaviour
 {
     [Header("Weapon Data")]
     public GunData currentGunData; 
@@ -35,10 +36,26 @@ public class Gun : MonoBehaviour
     [Header("Effects")]
     public GameObject bulletHolePrefab; 
     
+    private Camera plrCamera;
+    
     void Start()
     {
         gunTrigger = GetComponent<BoxCollider>();
-        gunTrigger.isTrigger = true; 
+        if (gunTrigger != null)
+        {
+            gunTrigger.isTrigger = true; 
+        }
+        
+        if (enemyManager == null)
+        {
+            enemyManager = FindObjectOfType<EnemyManager>();
+        }
+        
+        plrCamera = GetComponentInParent<Camera>();
+        if (plrCamera == null)
+        {
+            plrCamera = transform.root.GetComponentInChildren<Camera>();
+        }
         
         if (gunAnimator == null)
         {
@@ -58,11 +75,17 @@ public class Gun : MonoBehaviour
     {
         currentGunData = newGun;
         
-        gunTrigger.size = new Vector3(1, 20f, currentGunData.range);
-        gunTrigger.center = new Vector3(0, 0, currentGunData.range * 0.5f);
+        if (gunTrigger != null)
+        {
+            gunTrigger.size = new Vector3(1, 20f, currentGunData.range);
+            gunTrigger.center = new Vector3(0, 0, currentGunData.range * 0.5f);
+        }
         
         currentAmmo = currentGunData.maxAmmo;
-        CanvasManager.Instance.UpdateAmmo(currentAmmo);
+        if (IsOwner && CanvasManager.Instance != null)
+        {
+            CanvasManager.Instance.UpdateAmmo(currentAmmo);
+        }
         isReloading = false;
         
         if (gunAnimator != null && currentGunData.gunAnimatorController != null)
@@ -78,12 +101,17 @@ public class Gun : MonoBehaviour
         fireCooldownTimer = new CustomTimer(currentGunData.fireRate);
         fireCooldownTimer.OnTick += () => {
             canFire = true;
-            fireCooldownTimer.Stop();
+            if (fireCooldownTimer != null) fireCooldownTimer.Stop();
         };
     }
     
     void Update()
     {
+        if (!IsOwner)
+        {
+            return;
+        }
+        
         if (fireCooldownTimer != null)
         {
             fireCooldownTimer.Update();
@@ -102,11 +130,14 @@ public class Gun : MonoBehaviour
             Fire();
             
             canFire = false;
-            fireCooldownTimer.Start();
+            if (fireCooldownTimer != null) fireCooldownTimer.Start();
         }
         
-        Vector3 currentRecoil = recoilSpring.Update(Time.deltaTime);
-        transform.localPosition = originalLocalPosition + currentRecoil;
+        if (recoilSpring != null)
+        {
+            Vector3 currentRecoil = recoilSpring.Update(Time.deltaTime);
+            transform.localPosition = originalLocalPosition + currentRecoil;
+        }
     }
     
     void Fire()
@@ -118,43 +149,54 @@ public class Gun : MonoBehaviour
             gunAnimator.SetTrigger("ShootTrigger");
         }
         
-        recoilSpring.Impulse(new Vector3(0, recoilUp, -recoilKickback));
+        if (recoilSpring != null)
+        {
+            recoilSpring.Impulse(new Vector3(0, recoilUp, -recoilKickback));
+        }
         
         Collider[] enemyColliders = Physics.OverlapSphere(transform.position, currentGunData.gunShotRadius, enemyLayerMask);
         
         foreach (var enemyCollider in enemyColliders)
         {
-            EnemyAwareness awareness = enemyCollider.GetComponent<EnemyAwareness>();
-            if (awareness != null)
+            if (enemyCollider != null)
             {
-                awareness.isAggro = true;
-            }
-        }
-        
-        AudioManager.instance.Play(currentGunData.shootSoundName);
-        
-        foreach (var enemy in enemyManager.enemiesInTrigger)
-        {
-            var dir = enemy.transform.position - transform.position;
-            RaycastHit hit;
-            
-            if (Physics.Raycast(transform.position, dir, out hit, currentGunData.range, raycastLayerMask))
-            {
-                IDamageable target = hit.transform.GetComponent<IDamageable>();
-                if (target != null)
+                EnemyAwareness awareness = enemyCollider.GetComponent<EnemyAwareness>();
+                if (awareness != null)
                 {
-                    int minDmg = (int)currentGunData.smallDamage;
-                    int maxDmg = (int)currentGunData.bigDamage;
-                    float finalDamage = UnityEngine.Random.Range(minDmg, maxDmg + 1);
-                    
-                    target.TakeDamage(finalDamage);
-                    
-                    Debug.DrawRay(transform.position, dir, Color.green, 2f); 
+                    awareness.isAggro = true;
                 }
             }
         }
         
-        Transform camTransform = Camera.main.transform; 
+        PlayShootEffectsServerRpc(currentGunData.shootSoundName);
+        
+        if (enemyManager != null && enemyManager.enemiesInTrigger != null)
+        {
+            foreach (var enemy in enemyManager.enemiesInTrigger)
+            {
+                if (enemy == null) continue;
+                
+                var dir = enemy.transform.position - transform.position;
+                RaycastHit hit;
+                
+                if (Physics.Raycast(transform.position, dir, out hit, currentGunData.range, raycastLayerMask))
+                {
+                    IDamageable target = hit.transform.GetComponent<IDamageable>();
+                    if (target != null)
+                    {
+                        int minDmg = (int)currentGunData.smallDamage;
+                        int maxDmg = (int)currentGunData.bigDamage;
+                        float finalDamage = UnityEngine.Random.Range(minDmg, maxDmg + 1);
+                        
+                        target.TakeDamage(finalDamage);
+                        
+                        Debug.DrawRay(transform.position, dir, Color.green, 2f); 
+                    }
+                }
+            }
+        }
+        
+        Transform camTransform = plrCamera != null ? plrCamera.transform : transform;
         RaycastHit wallHit;
         
         if (Physics.Raycast(camTransform.position, camTransform.forward, out wallHit, currentGunData.range, raycastLayerMask))
@@ -175,52 +217,64 @@ public class Gun : MonoBehaviour
             }
             else
             {
-                if (bulletHolePrefab != null)
-                {
-                    Vector3 spawnPos = wallHit.point + (wallHit.normal * 0.01f);
-                    Quaternion spawnRot = Quaternion.LookRotation(-wallHit.normal);
-                    
-                    float randomRoll = UnityEngine.Random.Range(0f, 360f);
-                    spawnRot *= Quaternion.Euler(0f, 0f, randomRoll);
-                    
-                    GameObject hole = Instantiate(bulletHolePrefab, spawnPos, spawnRot);
-                    hole.transform.SetParent(wallHit.transform);
-                    
-                    Renderer wallRenderer = wallHit.transform.GetComponent<Renderer>();
-                    if (wallRenderer != null)
-                    {
-                        Color wallColor = Color.white;
-                        
-                        if (wallRenderer.material.HasProperty("_BaseColor"))
-                        {
-                            wallColor = wallRenderer.material.GetColor("_BaseColor");
-                        }
-                        else if (wallRenderer.material.HasProperty("_Color"))
-                        {
-                            wallColor = wallRenderer.material.color;
-                        }
-                        
-                        Renderer holeRenderer = hole.GetComponent<Renderer>();
-                        if (holeRenderer != null)
-                        {
-                            if (holeRenderer.material.HasProperty("_BaseColor"))
-                            {
-                                holeRenderer.material.SetColor("_BaseColor", wallColor);
-                            }
-                            else if (holeRenderer.material.HasProperty("_Color"))
-                            {
-                                holeRenderer.material.color = wallColor;
-                            }
-                        }
-                    }
-                    
-                    Destroy(hole, 10f);
-                }
+                SpawnBulletHole(wallHit.point, wallHit.normal, wallHit.transform);
+                SpawnBulletHoleServerRpc(wallHit.point, wallHit.normal);
             }
         }
         
         currentAmmo--;
-        CanvasManager.Instance.UpdateAmmo(currentAmmo);
+        if (IsOwner && CanvasManager.Instance != null)
+        {
+            CanvasManager.Instance.UpdateAmmo(currentAmmo);
+        }
+    }
+    
+    [ServerRpc]
+    private void PlayShootEffectsServerRpc(string soundName)
+    {
+        PlayShootEffectsClientRpc(soundName);
+    }
+    
+    [ClientRpc]
+    private void PlayShootEffectsClientRpc(string soundName)
+    {
+        if (AudioManager.instance != null && !string.IsNullOrEmpty(soundName))
+        {
+            AudioManager.instance.Play(soundName);
+        }
+    }
+    
+    [ServerRpc]
+    private void SpawnBulletHoleServerRpc(Vector3 point, Vector3 normal)
+    {
+        SpawnBulletHoleClientRpc(point, normal);
+    }
+    
+    [ClientRpc]
+    private void SpawnBulletHoleClientRpc(Vector3 point, Vector3 normal)
+    {
+        if (IsOwner) return; // เจ้าของเครื่องสร้างไปแล้วตอนกดยิง ไม่ต้องสร้างซ้ำ
+        SpawnBulletHole(point, normal, null);
+    }
+    
+    private void SpawnBulletHole(Vector3 point, Vector3 normal, Transform parentTransform)
+    {
+        if (bulletHolePrefab != null)
+        {
+            Vector3 spawnPos = point + (normal * 0.01f);
+            Quaternion spawnRot = Quaternion.LookRotation(-normal);
+            
+            float randomRoll = UnityEngine.Random.Range(0f, 360f);
+            spawnRot *= Quaternion.Euler(0f, 0f, randomRoll);
+            
+            GameObject hole = Instantiate(bulletHolePrefab, spawnPos, spawnRot);
+            if (parentTransform != null)
+            {
+                hole.transform.SetParent(parentTransform);
+            }
+            
+            Destroy(hole, 10f);
+        }
     }
     
     private IEnumerator ReloadRoutine()
@@ -236,7 +290,10 @@ public class Gun : MonoBehaviour
         yield return new WaitForSeconds(currentGunData.reloadTime);
         
         currentAmmo = currentGunData.maxAmmo;
-        CanvasManager.Instance.UpdateAmmo(currentAmmo);
+        if (IsOwner && CanvasManager.Instance != null)
+        {
+            CanvasManager.Instance.UpdateAmmo(currentAmmo);
+        }
         
         isReloading = false;
         Debug.Log("Reload Complete!");
@@ -249,7 +306,12 @@ public class Gun : MonoBehaviour
         if (currentAmmo < currentGunData.maxAmmo)
         {
             currentAmmo += amount;
-            Destroy(pickup);
+            if (IsServer)
+            {
+                NetworkObject netObj = pickup.GetComponent<NetworkObject>();
+                if (netObj != null && netObj.IsSpawned) netObj.Despawn(true);
+                else Destroy(pickup);
+            }
         }
         
         if (currentAmmo > currentGunData.maxAmmo)
@@ -257,24 +319,43 @@ public class Gun : MonoBehaviour
             currentAmmo = currentGunData.maxAmmo;
         }
         
-        CanvasManager.Instance.UpdateAmmo(currentAmmo);
+        if (IsOwner && CanvasManager.Instance != null)
+        {
+            CanvasManager.Instance.UpdateAmmo(currentAmmo);
+        }
     }
     
     private void OnTriggerEnter(Collider other)
     {
-        Enemy enemy = other.transform.GetComponent<Enemy>();
-        if (enemy)
+        if (enemyManager == null)
         {
-            enemyManager.AddEnemy(enemy);
+            enemyManager = FindObjectOfType<EnemyManager>();
+        }
+        
+        if (enemyManager != null)
+        {
+            Enemy enemy = other.transform.GetComponent<Enemy>();
+            if (enemy != null)
+            {
+                enemyManager.AddEnemy(enemy);
+            }
         }
     }
     
     private void OnTriggerExit(Collider other)
     {
-        Enemy enemy = other.transform.GetComponent<Enemy>();
-        if (enemy)
+        if (enemyManager == null)
         {
-            enemyManager.RemoveEnemy(enemy);
+            enemyManager = FindObjectOfType<EnemyManager>();
+        }
+        
+        if (enemyManager != null)
+        {
+            Enemy enemy = other.transform.GetComponent<Enemy>();
+            if (enemy != null)
+            {
+                enemyManager.RemoveEnemy(enemy);
+            }
         }
     }
 }
