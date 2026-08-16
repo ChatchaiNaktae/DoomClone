@@ -40,6 +40,15 @@ public class MainMenuController : MonoBehaviour
     public Button startGameButton;
     public Button leaveLobbyButton;
     
+    [Header("Server List UI")]
+    public GameObject serverListPanel;
+    public TMP_InputField ipInputField;
+    public TMP_InputField portInputField;
+    public Button connectButton;
+    public Button serverListBackButton;
+    public Transform serverListContent;
+    public GameObject serverEntryPrefab;
+    
     public static bool isSingleplayerMode = false;
     
     private void Awake()
@@ -54,7 +63,7 @@ public class MainMenuController : MonoBehaviour
         
         // Main Menu Bindings
         if (hostButton != null) hostButton.onClick.AddListener(OnHostButtonClicked);
-        if (joinButton != null) joinButton.onClick.AddListener(StartJoinGame);
+        if (joinButton != null) joinButton.onClick.AddListener(OnJoinButtonClicked);
         if (singleplayerButton != null) singleplayerButton.onClick.AddListener(StartSingleplayerGame);
         if (quitButton != null) quitButton.onClick.AddListener(QuitGame);
         
@@ -71,6 +80,11 @@ public class MainMenuController : MonoBehaviour
         // Lobby Room Bindings
         if (startGameButton != null) startGameButton.onClick.AddListener(OnStartGameClicked);
         if (leaveLobbyButton != null) leaveLobbyButton.onClick.AddListener(OnLeaveLobbyClicked);
+        
+        if (connectButton != null) connectButton.onClick.AddListener(OnConnectByIPClicked);
+        if (serverListBackButton != null) serverListBackButton.onClick.AddListener(OnServerListBackClicked);
+        
+        if (serverListPanel != null) serverListPanel.SetActive(false);
         
         InitializeConfigUI();
         
@@ -94,6 +108,7 @@ public class MainMenuController : MonoBehaviour
             
             if (NetworkManager.Singleton.SceneManager != null)
             {
+                NetworkManager.Singleton.OnClientConnectedCallback -= OnClientConnectedCallbackHandler;
                 NetworkManager.Singleton.SceneManager.OnLoadEventCompleted -= OnSceneLoadedComplete;
             }
         }
@@ -164,6 +179,9 @@ public class MainMenuController : MonoBehaviour
             NetworkManager.Singleton.ConnectionApprovalCallback = ApprovalCheck;
             NetworkManager.Singleton.StartHost();
             
+            NetworkManager.Singleton.OnClientConnectedCallback -= OnClientConnectedCallbackHandler;
+            NetworkManager.Singleton.OnClientConnectedCallback += OnClientConnectedCallbackHandler;
+            
             // Subscribe SceneManager event safely after Host starts
             if (NetworkManager.Singleton.SceneManager != null)
             {
@@ -200,8 +218,101 @@ public class MainMenuController : MonoBehaviour
         response.CreatePlayerObject = false;
     }
     
+    private void OnJoinButtonClicked()
+    {
+        if (serverListPanel != null) serverListPanel.SetActive(true);
+        if (NetworkDiscoveryManager.Instance != null)
+        {
+            NetworkDiscoveryManager.Instance.StartListening();
+        }
+        StartCoroutine(UpdateServerListRoutine());
+    }
+    
+    private void OnServerListBackClicked()
+    {
+        StopAllCoroutines();
+        if (NetworkDiscoveryManager.Instance != null)
+        {
+            NetworkDiscoveryManager.Instance.StopListening();
+        }
+        if (serverListPanel != null) serverListPanel.SetActive(false);
+    }
+    
+    private IEnumerator UpdateServerListRoutine()
+    {
+        while (serverListPanel != null && serverListPanel.activeSelf)
+        {
+            RefreshServerListDisplay();
+            yield return new WaitForSeconds(1.0f);
+        }
+    }
+    
+    private void RefreshServerListDisplay()
+    {
+        if (serverListContent == null || serverEntryPrefab == null || NetworkDiscoveryManager.Instance == null)
+            return;
+        
+        foreach (Transform child in serverListContent)
+        {
+            Destroy(child.gameObject);
+        }
+        
+        foreach (var server in NetworkDiscoveryManager.Instance.discoveredServers.Values)
+        {
+            GameObject entry = Instantiate(serverEntryPrefab, serverListContent);
+            ServerEntryUI entryUI = entry.GetComponent<ServerEntryUI>();
+            if (entryUI != null)
+            {
+                entryUI.Setup(server, ConnectToServer);
+            }
+        }
+    }
+    
+    public void ConnectToServer(string ip, ushort port)
+    {
+        var transport = NetworkManager.Singleton.GetComponent<Unity.Netcode.Transports.UTP.UnityTransport>();
+        if (transport != null)
+        {
+            transport.SetConnectionData(ip, port);
+        }
+        
+        if (NetworkDiscoveryManager.Instance != null)
+        {
+            NetworkDiscoveryManager.Instance.StopListening();
+        }
+        
+        if (serverListPanel != null)
+            serverListPanel.SetActive(false);
+        StartJoinGame();
+    }
+    
+    private void OnConnectByIPClicked()
+    {
+        string targetIP = string.IsNullOrEmpty(ipInputField.text) ? "127.0.0.1" : ipInputField.text;
+        ushort targetPort = 7777;
+        
+        if (portInputField != null && !string.IsNullOrEmpty(portInputField.text))
+        {
+            ushort.TryParse(portInputField.text, out targetPort);
+        }
+        
+        var transport = NetworkManager.Singleton.GetComponent<Unity.Netcode.Transports.UTP.UnityTransport>();
+        if (transport != null)
+        {
+            transport.SetConnectionData(targetIP, targetPort);
+        }
+        
+        if (serverListPanel != null) serverListPanel.SetActive(false);
+        StartJoinGame();
+    }
+    
     public void StartJoinGame()
     {
+        if (NetworkDiscoveryManager.Instance != null)
+        {
+            NetworkDiscoveryManager.Instance.StopListening();
+        }
+        
         if (NetworkManager.Singleton != null)
         {
             if (NetworkManager.Singleton.IsListening) NetworkManager.Singleton.Shutdown();
@@ -218,13 +329,16 @@ public class MainMenuController : MonoBehaviour
         {
             if (NetworkManager.Singleton.IsConnectedClient)
             {
-                Camera menuCam = Camera.main;
-                if (menuCam != null)
+                if (SceneManager.GetActiveScene().name == gameplaySceneName)
                 {
-                    menuCam.enabled = true;
+                    menuContainer?.SetActive(false);
+                    hostConfigPanel?.SetActive(false);
+                    lobbyPanel?.SetActive(false);
                 }
-                
-                OpenLobbyUI(isHost: false);
+                else
+                {
+                    OpenLobbyUI(isHost: false);
+                }
                 yield break;
             }
             timer += Time.deltaTime;
@@ -290,6 +404,21 @@ public class MainMenuController : MonoBehaviour
                         }
                     }
                 }
+            }
+        }
+    }
+    
+    private void OnClientConnectedCallbackHandler(ulong clientId)
+    {
+        // Late-join: If game is already active in DoomClone, spawn the late player immediately
+        if (NetworkManager.Singleton.IsServer && SceneManager.GetActiveScene().name == gameplaySceneName)
+        {
+            GameObject playerPrefab = NetworkManager.Singleton.NetworkConfig.PlayerPrefab;
+            if (playerPrefab != null)
+            {
+                Vector3 spawnPos = new Vector3(0f, 2f, 0f);
+                GameObject playerInstance = Instantiate(playerPrefab, spawnPos, Quaternion.identity);
+                playerInstance.GetComponent<NetworkObject>().SpawnAsPlayerObject(clientId, true);
             }
         }
     }
