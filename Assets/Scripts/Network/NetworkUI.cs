@@ -8,12 +8,22 @@ public class NetworkUI : MonoBehaviour
 {
     public GameObject lobbyCamera;
     
+    // Flag to check if we should auto-host after reload
+    private static bool shouldAutoStartHost = false;
+    
     private void Start()
     {
         // Subscribe to connection/disconnection events
         if (NetworkManager.Singleton != null)
         {
             NetworkManager.Singleton.OnClientDisconnectCallback += HandleClientDisconnected;
+        }
+        
+        // If flagged from host disconnect, start host automatically
+        if (shouldAutoStartHost)
+        {
+            shouldAutoStartHost = false;
+            StartHostMode();
         }
     }
     
@@ -28,42 +38,52 @@ public class NetworkUI : MonoBehaviour
     
     private void OnGUI()
     {
+        // If game is already running (Host or Client), hide the GUI buttons
+        if (NetworkManager.Singleton != null && (NetworkManager.Singleton.IsClient || NetworkManager.Singleton.IsServer))
+        {
+            return;
+        }
+        
         GUILayout.BeginArea(new Rect(10, 10, 300, 300));
         
-        if (NetworkManager.Singleton != null && !NetworkManager.Singleton.IsClient && !NetworkManager.Singleton.IsServer)
+        if (GUILayout.Button("Start Host (Player 1)", GUILayout.Height(40)))
         {
-            if (GUILayout.Button("Start Host (Player 1)", GUILayout.Height(40)))
-            {
-                NetworkManager.Singleton.StartHost();
-                if (lobbyCamera != null) lobbyCamera.SetActive(false);
-            }
-            
-            if (GUILayout.Button("Start Client (Player 2)", GUILayout.Height(40)))
-            {
-                NetworkManager.Singleton.StartClient();
-                if (lobbyCamera != null) lobbyCamera.SetActive(false);
-            }
+            StartHostMode();
+        }
+        
+        if (GUILayout.Button("Start Client (Player 2)", GUILayout.Height(40)))
+        {
+            NetworkManager.Singleton.StartClient();
+            if (lobbyCamera != null) lobbyCamera.SetActive(false);
         }
         
         GUILayout.EndArea();
     }
     
+    public void StartHostMode()
+    {
+        if (NetworkManager.Singleton != null)
+        {
+            NetworkManager.Singleton.StartHost();
+            if (lobbyCamera != null) lobbyCamera.SetActive(false);
+        }
+    }
+    
     private void HandleClientDisconnected(ulong clientId)
     {
-        // If we are a client and the host disconnected (clientId 0 is always Host/Server)
+        // If we are a client and the host disconnected
         if (NetworkManager.Singleton.IsClient && !NetworkManager.Singleton.IsServer)
         {
-            Debug.LogWarning("Host disconnected! Switching to Singleplayer mode...");
+            Debug.LogWarning("Host disconnected! Switching to Singleplayer mode seamlessly...");
+            
+            shouldAutoStartHost = true;
             
             // 1. Shut down client network connection
             NetworkManager.Singleton.Shutdown();
             
-            // 2. Restart as Host instantly or Reload current scene to play singleplayer
-            // Option A: Reload scene fresh for clean singleplayer
+            // 2. Reload active scene fresh
             Scene activeScene = SceneManager.GetActiveScene();
             SceneManager.LoadScene(activeScene.buildIndex);
-            
-            // Note: After reload, player can immediately click "Start Host" to play solo or invite new friends.
         }
     }
 }
