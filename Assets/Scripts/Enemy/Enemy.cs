@@ -4,7 +4,6 @@ using UnityEngine;
 using UnityEngine.AI;
 using Unity.Netcode;
 
-// Enemy implements IDamageable to receive hits from weapons
 public class Enemy : NetworkBehaviour, IDamageable
 {
     private EnemyManager enemyManager;
@@ -14,43 +13,62 @@ public class Enemy : NetworkBehaviour, IDamageable
     private float enemyHealth = 2f;
     public GameObject gunHitEffect;
     
-    private bool isDead = false;
+    // Synced death state across all clients and late joiners
+    public NetworkVariable<bool> isDead = new NetworkVariable<bool>(
+        false, 
+        NetworkVariableReadPermission.Everyone, 
+        NetworkVariableWritePermission.Server
+    );
     
-    void Start()
+    public override void OnNetworkSpawn()
     {
+        base.OnNetworkSpawn();
+        
         spriteAnim = GetComponentInChildren<Animator>();
         angleToPlayer = GetComponent<AngleToPlayer>();
         enemyManager = FindObjectOfType<EnemyManager>();
+        
+        // Listen for death state changes
+        isDead.OnValueChanged += OnDeathStateChanged;
+        
+        // If late-joining client enters and enemy is already dead
+        if (isDead.Value)
+        {
+            ApplyDeathState(false);
+        }
+    }
+
+    public override void OnNetworkDespawn()
+    {
+        base.OnNetworkDespawn();
+        isDead.OnValueChanged -= OnDeathStateChanged;
     }
     
     void Update()
     {
-        if (isDead || spriteAnim == null || angleToPlayer == null) return;
+        if (isDead.Value || spriteAnim == null || angleToPlayer == null) return;
         
-        // beginning of update set the animations rotational index
         spriteAnim.SetFloat("spriteRot", angleToPlayer.lastIndex);
     }
     
-    // This method is required by the IDamageable interface
     public void TakeDamage(float damage)
     {
-        if (isDead) return;
+        if (isDead.Value) return;
         
         RequestDamageServerRpc(damage);
     }
-    
+
     [ServerRpc(RequireOwnership = false)]
     private void RequestDamageServerRpc(float damage)
     {
-        if (isDead) return;
+        if (isDead.Value) return;
         
         enemyHealth -= damage;
-        
         PlayHitEffectClientRpc();
         
         if (enemyHealth <= 0)
         {   
-            Die();
+            isDead.Value = true; // Server updates NetworkVariable -> triggers on all clients
         }
     }
     
@@ -63,18 +81,17 @@ public class Enemy : NetworkBehaviour, IDamageable
         }
     }
     
-    private void Die()
+    private void OnDeathStateChanged(bool previousValue, bool newValue)
     {
-        isDead = true;
-        
-        DieClientRpc();
+        if (newValue)
+        {
+            ApplyDeathState(true);
+        }
     }
     
-    [ClientRpc]
-    private void DieClientRpc()
+    private void ApplyDeathState(bool playAudio)
     {
-        isDead = true;
-        if (AudioManager.instance != null)
+        if (playAudio && AudioManager.instance != null)
         {
             AudioManager.instance.Play3D($"ImpDeath{Random.Range(1, 3)}", transform.position);
         }
