@@ -227,6 +227,9 @@ public class PlayerHealth : NetworkBehaviour, IDamageable
         
         if (camAnim != null) camAnim.enabled = true;
         
+        CharacterController controller = GetComponent<CharacterController>();
+        if (controller != null) controller.enabled = false;
+        
         // Warp back to the starting spawn point.
         transform.position = initialSpawnPosition;
         transform.rotation = initialSpawnRotation;
@@ -250,11 +253,10 @@ public class PlayerHealth : NetworkBehaviour, IDamageable
         {
             PlayerMovement movement = GetComponent<PlayerMovement>();
             MouseLook mouseLook = GetComponent<MouseLook>();
-            CharacterController controller = GetComponent<CharacterController>();
             
             if (movement != null) movement.enabled = true;
             if (mouseLook != null) mouseLook.enabled = true;
-            if (controller != null) controller.enabled = true;
+            if (controller != null) controller.enabled = true; // เปิด controller กลับมาหลังจากย้ายตำแหน่งแล้ว
             
             if (gunScript != null) gunScript.enabled = true;
         }

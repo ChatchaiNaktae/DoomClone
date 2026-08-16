@@ -9,15 +9,36 @@ public class DamageTrigger : MonoBehaviour
     
     private float damageCounter;
     private List<PlayerHealth> playersInTrigger = new List<PlayerHealth>();
+    private Collider triggerCollider;
     
     void Start()
     {
         damageCounter = timeBetweenDamage;
+        triggerCollider = GetComponent<Collider>();
     }
     
     void Update()
     {
-        playersInTrigger.RemoveAll(p => p == null);
+        for (int i = playersInTrigger.Count - 1; i >= 0; i--)
+        {
+            PlayerHealth player = playersInTrigger[i];
+            
+            if (player == null)
+            {
+                playersInTrigger.RemoveAt(i);
+                continue;
+            }
+            
+            if (triggerCollider != null)
+            {
+                Vector3 closestPoint = triggerCollider.ClosestPoint(player.transform.position);
+                float distanceToTrigger = Vector3.Distance(closestPoint, player.transform.position);
+                if (distanceToTrigger > 1.5f)
+                {
+                    playersInTrigger.RemoveAt(i);
+                }
+            }
+        }
         
         if (playersInTrigger.Count > 0)
         {
