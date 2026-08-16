@@ -267,6 +267,7 @@ GameObject:
   - component: {fileID: 105759205}
   - component: {fileID: 105759204}
   - component: {fileID: 105759203}
+  - component: {fileID: 105759206}
   m_Layer: 0
   m_Name: NetworkManager
   m_TagString: Untagged
@@ -290,9 +291,9 @@ MonoBehaviour:
   m_MaxPacketQueueSize: 128
   m_MaxPayloadSize: 6144
   m_HeartbeatTimeoutMS: 500
-  m_ConnectTimeoutMS: 1000
-  m_MaxConnectAttempts: 60
-  m_DisconnectTimeoutMS: 30000
+  m_ConnectTimeoutMS: 3000
+  m_MaxConnectAttempts: 5
+  m_DisconnectTimeoutMS: 3000
   ConnectionData:
     Address: 127.0.0.1
     Port: 7777
@@ -323,7 +324,7 @@ MonoBehaviour:
       - {fileID: 11400000, guid: 2653c62a8d4a1fa41b01d75fd40cd8ec, type: 2}
     TickRate: 30
     ClientConnectionBufferTimeout: 10
-    ConnectionApproval: 0
+    ConnectionApproval: 1
     ConnectionData: 
     EnableTimeResync: 0
     TimeResyncInterval: 30
@@ -354,6 +355,18 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &105759206
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 105759202}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1e992e530a2ca6144960f748323deffa, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!1 &165107999
 GameObject:
   m_ObjectHideFlags: 0

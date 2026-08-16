@@ -15,6 +15,7 @@ public class PlayerMovement : NetworkBehaviour
     private Vector3 inputVector;
     private Vector3 movementVector;
     private float gravity = -10f;
+    private float verticalVelocity = 0f;
     
     private SpringVector3 momentumSpring;
     
@@ -36,7 +37,7 @@ public class PlayerMovement : NetworkBehaviour
     
     void Update()
     {
-        if (!IsOwner)
+        if (!IsOwner || controller == null || !controller.enabled)
         {
             return;
         }
@@ -76,7 +77,17 @@ public class PlayerMovement : NetworkBehaviour
         // Update the spring to calculate the smoothed momentum
         inputVector = momentumSpring.Update(Time.deltaTime);
         
-        movementVector = (inputVector * speed) + (Vector3.up * gravity);
+        // Handle ground check and vertical velocity
+        if (controller.isGrounded)
+        {
+            verticalVelocity = -2f; // Slight downward force to stay grounded
+        }
+        else
+        {
+            verticalVelocity += gravity * Time.deltaTime;
+        }
+        
+        movementVector = (inputVector * speed) + (Vector3.up * verticalVelocity);
     }   
     
     void MovePlayer()
@@ -86,18 +97,17 @@ public class PlayerMovement : NetworkBehaviour
             controller.Move(movementVector * Time.deltaTime);
         }
     }
-
+    
     public override void OnNetworkSpawn()
     {
         base.OnNetworkSpawn();
         
         Camera plrCamera = GetComponentInChildren<Camera>();
         AudioListener audioListener = GetComponentInChildren<AudioListener>();
-        CharacterController charController = GetComponent<CharacterController>();
-
+        
         if (IsOwner)
         {
-            // if it is your character, turn on the camera and audio system.
+            // If it is your character, turn on the camera and audio system
             if (plrCamera != null)
             {
                 plrCamera.enabled = true;
@@ -107,27 +117,36 @@ public class PlayerMovement : NetworkBehaviour
             {
                 audioListener.enabled = true;
             }
-            if (charController != null)
-            {
-                charController.enabled = true;
-            }
+            
+            // Reposition slightly above floor and enable controller safely
+            StartCoroutine(SafeSpawnPositionRoutine());
         }
         else
         {
-            // if it is a friend's character, turn off the camera and audio system.
-            if (plrCamera != null)
-            {
-                plrCamera.enabled = false;
-            }
-            if (audioListener != null)
-            {
-                audioListener.enabled = false;
-            }
-
-            if (charController != null)
-            {
-                charController.enabled = false;
-            }
+            // If it is a remote character, turn off the camera, audio, and controller
+            if (plrCamera != null) plrCamera.enabled = false;
+            if (audioListener != null) audioListener.enabled = false;
+            if (controller != null) controller.enabled = false;
+        }
+    }
+    
+    private IEnumerator SafeSpawnPositionRoutine()
+    {
+        // Temporarily disable controller to prevent instant falling before physics settles
+        if (controller != null)
+        {
+            controller.enabled = false;
+        }
+        
+        // Lift player slightly above the floor (+1.5 units) to prevent collider intersection
+        transform.position = new Vector3(transform.position.x, transform.position.y + 1.5f, transform.position.z);
+        
+        // Wait for physics system and scene colliders to initialize
+        yield return new WaitForFixedUpdate();
+        
+        if (controller != null)
+        {
+            controller.enabled = true;
         }
     }
 }
