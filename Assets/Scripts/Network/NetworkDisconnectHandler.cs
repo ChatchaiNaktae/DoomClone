@@ -23,9 +23,9 @@ public class NetworkDisconnectHandler : MonoBehaviour
     
     private void OnClientDisconnected(ulong clientId)
     {
-        if (NetworkManager.Singleton != null && !NetworkManager.Singleton.IsServer)
+        if (SceneManager.GetActiveScene().name != "MainMenu" && NetworkManager.Singleton != null && !NetworkManager.Singleton.IsServer)
         {
-            Debug.LogWarning("Host disconnected! Performing Seamless Host Migration to Singleplayer...");
+            Debug.LogWarning("[Host Migration] Host disconnected! Promoting local player to Host...");
             StartCoroutine(SeamlessHostMigrationRoutine());
         }
     }
@@ -43,7 +43,7 @@ public class NetworkDisconnectHandler : MonoBehaviour
         
         NetworkManager.Singleton.StartHost();
         
-        Scene currentScene = SceneManager.GetActiveScene();
-        NetworkManager.Singleton.SceneManager.LoadScene(currentScene.name, LoadSceneMode.Single);
+        string currentScene = SceneManager.GetActiveScene().name;
+        NetworkManager.Singleton.SceneManager.LoadScene(currentScene, LoadSceneMode.Single);
     }
 }
