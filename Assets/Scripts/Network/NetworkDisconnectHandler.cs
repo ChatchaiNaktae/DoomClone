@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using Unity.Netcode;
@@ -39,7 +40,13 @@ public class NetworkDisconnectHandler : MonoBehaviour
             yield return null;
         }
         
-        yield return new WaitForSeconds(0.1f);
+        PlayerMovement[] oldPlayers = FindObjectsOfType<PlayerMovement>();
+        foreach (var p in oldPlayers)
+        {
+            Destroy(p.gameObject);
+        }
+        
+        yield return new WaitForSeconds(0.2f);
         
         NetworkManager.Singleton.StartHost();
         

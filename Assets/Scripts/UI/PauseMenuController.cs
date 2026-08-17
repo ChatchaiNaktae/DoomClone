@@ -36,19 +36,6 @@ public class PauseMenuController : MonoBehaviour
             quitToMenuButton.onClick.AddListener(QuitToMainMenu);
         
         IsPaused = false;
-        
-        if (NetworkManager.Singleton != null)
-        {
-            NetworkManager.Singleton.OnClientDisconnectCallback += OnClientDisconnected;
-        }
-    }
-    
-    private void OnDestroy()
-    {
-        if (NetworkManager.Singleton != null)
-        {
-            NetworkManager.Singleton.OnClientDisconnectCallback -= OnClientDisconnected;
-        }
     }
     
     private void Update()
@@ -73,6 +60,13 @@ public class PauseMenuController : MonoBehaviour
         if (pauseMenuPanel != null)
         {
             pauseMenuPanel.SetActive(true);
+        }
+        
+        if (restartButton != null)
+        {
+            bool canRestart = MainMenuController.isSingleplayerMode || 
+                              (NetworkManager.Singleton != null && NetworkManager.Singleton.IsServer);
+            restartButton.gameObject.SetActive(canRestart);
         }
         
         Cursor.lockState = CursorLockMode.None;
@@ -104,6 +98,15 @@ public class PauseMenuController : MonoBehaviour
     
     public void RestartGame()
     {
+        if (!MainMenuController.isSingleplayerMode)
+        {
+            if (NetworkManager.Singleton == null || !NetworkManager.Singleton.IsServer)
+            {
+                Debug.LogWarning("[PauseMenu] Only the Host can restart the level.");
+                return;
+            }
+        }
+        
         Time.timeScale = 1f;
         IsPaused = false;
         
@@ -127,28 +130,25 @@ public class PauseMenuController : MonoBehaviour
         CleanupAndReturnToMenu();
     }
     
-    private void OnClientDisconnected(ulong clientId)
-    {
-        if (NetworkManager.Singleton != null && !NetworkManager.Singleton.IsServer)
-        {
-            Debug.Log("[PauseMenu] Host disconnected. Returning to Main Menu...");
-            CleanupAndReturnToMenu();
-        }
-    }
-    
     private void CleanupAndReturnToMenu()
     {
         Time.timeScale = 1f;
         IsPaused = false;
+        
+        if (NetworkDiscoveryManager.Instance != null)
+        {
+            NetworkDiscoveryManager.Instance.StopListening();
+        }
         
         if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
         {
             NetworkManager.Singleton.Shutdown();
         }
         
-        if (NetworkDiscoveryManager.Instance != null)
+        PlayerMovement[] players = FindObjectsOfType<PlayerMovement>();
+        foreach (var p in players)
         {
-            NetworkDiscoveryManager.Instance.StopListening();
+            Destroy(p.gameObject);
         }
         
         Cursor.lockState = CursorLockMode.None;

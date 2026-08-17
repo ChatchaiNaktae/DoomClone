@@ -54,6 +54,11 @@ public class MainMenuController : MonoBehaviour
     public TMP_InputField joinCodeInputField;
     public Button joinByCodeButton;
     
+    [Header("Name Entry Popup")]
+    public GameObject nameEntryPanel;
+    public TMP_InputField usernameInputField;
+    public Button confirmNameButton;
+    
     public static bool isSingleplayerMode = false;
     
     private void Awake()
@@ -65,6 +70,21 @@ public class MainMenuController : MonoBehaviour
     {
         Cursor.lockState = CursorLockMode.None;
         Cursor.visible = true;
+        
+        string nameKey = GetUniquePlayerPrefsKey("PlayerUsername");
+        string currentName = PlayerPrefs.GetString(nameKey, "");
+        
+        if (string.IsNullOrEmpty(currentName))
+        {
+            if (nameEntryPanel != null) nameEntryPanel.SetActive(true);
+        }
+        else
+        {
+            if (nameEntryPanel != null) nameEntryPanel.SetActive(false);
+            if (usernameInputField != null) usernameInputField.text = currentName;
+        }
+        
+        if (confirmNameButton != null) confirmNameButton.onClick.AddListener(OnConfirmNameClicked);
         
         // Main Menu Bindings
         if (hostButton != null) hostButton.onClick.AddListener(OnHostButtonClicked);
@@ -105,6 +125,44 @@ public class MainMenuController : MonoBehaviour
             NetworkManager.Singleton.OnClientConnectedCallback += OnPlayerListUpdated;
             NetworkManager.Singleton.OnClientDisconnectCallback += OnPlayerDisconnected;
         }
+    }
+    
+    // Helper to separate PlayerPrefs keys between Main Editor and ParrelSync Clones
+    private string GetUniquePlayerPrefsKey(string baseKey)
+    {
+        #if UNITY_EDITOR
+        if (ParrelSync.ClonesManager.IsClone())
+        {
+            string customArgument = ParrelSync.ClonesManager.GetArgument();
+            return $"{baseKey}_{customArgument}";
+        }
+        #endif
+        return baseKey;
+    }
+    
+    private void OnConfirmNameClicked()
+    {
+        string enteredName = usernameInputField != null ? usernameInputField.text.Trim() : "";
+        if (string.IsNullOrEmpty(enteredName))
+        {
+            #if UNITY_EDITOR
+            string suffix = ParrelSync.ClonesManager.IsClone() ? "Clone" : "Host";
+            enteredName = $"Player_{suffix}_{Random.Range(100, 999)}";
+            #else
+            enteredName = $"Player_{Random.Range(100, 999)}";
+            #endif
+        }
+        
+        string nameKey = GetUniquePlayerPrefsKey("PlayerUsername");
+        PlayerPrefs.SetString(nameKey, enteredName);
+        PlayerPrefs.Save();
+        
+        if (nameEntryPanel != null)
+        {
+            nameEntryPanel.SetActive(false);
+        }
+        
+        Debug.Log($"[MainMenu] Username set to: {enteredName} (Key: {nameKey})");
     }
     
     private void OnDestroy()
@@ -304,6 +362,12 @@ public class MainMenuController : MonoBehaviour
         if (serverListPanel != null)
             serverListPanel.SetActive(false);
         
+        if (NetworkManager.Singleton != null && NetworkManager.Singleton.IsListening)
+        {
+            NetworkManager.Singleton.Shutdown();
+            await Task.Delay(100);
+        }
+        
         // Find server data to inspect Relay Code
         string serverKey = $"{GameConfig.serverName}_{port}";
         string relayCode = "";
@@ -314,7 +378,6 @@ public class MainMenuController : MonoBehaviour
             relayCode = server.relayCode;
         }
         
-        // If Relay Code exists, connect via Relay Service
         if (!string.IsNullOrEmpty(relayCode) && RelayManager.Instance != null)
         {
             Debug.Log($"[MainMenu] Joining via Discovered Relay Code: {relayCode}");
@@ -326,7 +389,6 @@ public class MainMenuController : MonoBehaviour
             }
         }
         
-        // Fallback to Direct IP connection
         Debug.Log($"[MainMenu] Joining via Direct IP: {ip}:{port}");
         var transport = NetworkManager.Singleton.GetComponent<Unity.Netcode.Transports.UTP.UnityTransport>();
         if (transport != null)
@@ -406,7 +468,10 @@ public class MainMenuController : MonoBehaviour
         
         if (NetworkManager.Singleton != null)
         {
-            if (NetworkManager.Singleton.IsListening) NetworkManager.Singleton.Shutdown();
+            if (NetworkManager.Singleton.IsListening)
+            {
+                NetworkManager.Singleton.Shutdown();
+            }
             
             NetworkManager.Singleton.StartClient();
             StartCoroutine(CheckConnectionRoutine(6f));

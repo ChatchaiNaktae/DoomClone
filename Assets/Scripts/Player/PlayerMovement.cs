@@ -160,4 +160,26 @@ public class PlayerMovement : NetworkBehaviour
             controller.enabled = true;
         }
     }
+    
+    public override void OnNetworkDespawn()
+    {
+        base.OnNetworkDespawn();
+        
+        Camera plrCamera = GetComponentInChildren<Camera>();
+        AudioListener audioListener = GetComponentInChildren<AudioListener>();
+        
+        if (plrCamera != null)
+            plrCamera.enabled = false;
+        if (audioListener != null)
+            audioListener.enabled = false;
+    }
+    
+    private void OnDestroy()
+    {
+        if (IsOwner)
+        {
+            Cursor.lockState = CursorLockMode.None;
+            Cursor.visible = true;
+        }
+    }
 }
